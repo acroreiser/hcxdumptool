@@ -3641,6 +3641,7 @@ static size_t testptklen;
 static size_t testmiclen;
 static EVP_MD_CTX *mdctx;
 static EVP_PKEY *pkey;
+static CMAC_CTX *ctx;
 
 static uint8_t pkedata[102];
 static uint8_t testptk[EVP_MAX_MD_SIZE];
@@ -3889,35 +3890,22 @@ else if(keyver == 3)
 		}
 	EVP_PKEY_free(pkey);
 	EVP_MD_CTX_free(mdctx);
+
 	testmiclen = 16;
-	mdctx = EVP_MD_CTX_new();
-	if(mdctx == 0) return false;
-	pkey = EVP_PKEY_new_CMAC_key(NULL, testptk, 16, EVP_aes_128_cbc());
-	if(pkey == NULL)
+	ctx = CMAC_CTX_new();
+	if(ctx == NULL) return false;
+	if(CMAC_Init(ctx, testptk, 16, EVP_aes_128_cbc(), NULL) != 1)
 		{
-		EVP_MD_CTX_free(mdctx);
+		CMAC_CTX_free(ctx);
 		return false;
 		}
-	if(EVP_DigestSignInit(mdctx, NULL, NULL, NULL, pkey) != 1)
+	if(!CMAC_Update(ctx, eapauthptr, authlen +EAPAUTH_SIZE))
 		{
-		EVP_PKEY_free(pkey);
-		EVP_MD_CTX_free(mdctx);
+		CMAC_CTX_free(ctx);
 		return false;
 		}
-	if(EVP_DigestSignUpdate(mdctx, eapauthptr, authlen +EAPAUTH_SIZE) != 1)
-		{
-		EVP_PKEY_free(pkey);
-		EVP_MD_CTX_free(mdctx);
-		return false;
-		}
-	if(EVP_DigestSignFinal(mdctx, testmic, &testmiclen) <= 0)
-		{
-		EVP_PKEY_free(pkey);
-		EVP_MD_CTX_free(mdctx);
-		return false;
-		}
-	EVP_PKEY_free(pkey);
-	EVP_MD_CTX_free(mdctx);
+	CMAC_Final(ctx, testmic, &testmiclen);
+
 	if(memcmp(&keymic, &testmic, 16) == 0) return true;
 	}
 return false;
