@@ -7580,7 +7580,6 @@ static inline bool globalinit()
 {
 static int c;
 static int gpiobasemem = 0;
-static unsigned long opensslversion;
 static const char notavailable[] = { "N/A" };
 
 gettimeofday(&tv, NULL);
@@ -7637,9 +7636,7 @@ if(gpiostatusled > 0)
 		}
 	}
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-SSL_library_init();
-#endif
+unsigned long opensslversion;
 opensslversion = OpenSSL_version_num();
 opensslversionmajor = (opensslversion & 0x10000000L) >> 28;
 opensslversionminor = (opensslversion & 0x01100000L) >> 20;
