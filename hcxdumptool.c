@@ -570,11 +570,6 @@ if(rebootflag == true)
 		exit(EXIT_FAILURE);
 		}
 	}
-
-EVP_cleanup();
-CRYPTO_cleanup_all_ex_data();
-ERR_free_strings();
-
 if(errorcount != 0) exit(EXIT_FAILURE);
 if(totflag == true) exit(USER_EXIT_TOT);
 exit(EXIT_SUCCESS);
@@ -7641,9 +7636,9 @@ if(gpiostatusled > 0)
 		}
 	}
 
-
-ERR_load_crypto_strings();
-OpenSSL_add_all_algorithms();
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+SSL_library_init();
+#endif
 opensslversion = OpenSSL_version_num();
 opensslversionmajor = (opensslversion & 0x10000000L) >> 28;
 opensslversionminor = (opensslversion & 0x01100000L) >> 20;
