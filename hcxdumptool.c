@@ -4024,9 +4024,9 @@ mdctx = NULL;
 md = NULL;
 pkey = NULL;
 mdctx = EVP_MD_CTX_new();
-if(mdctx == 0) return false;
+
 md = EVP_get_digestbyname("SHA1");
-if(md == 0) return false;
+if(mdctx == 0) return false;
 pkey = EVP_PKEY_new_mac_key(EVP_PKEY_HMAC, NULL, pmk, 32);
 if(pkey == NULL) return false;
 if(EVP_DigestSignInit(mdctx, NULL, md, NULL, pkey) <= 0) return false;
