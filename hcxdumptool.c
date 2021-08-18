@@ -38,6 +38,7 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <netpacket/packet.h>
+#include <openssl/opensslv.h>
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
