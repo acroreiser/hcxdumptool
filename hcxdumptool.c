@@ -70,9 +70,6 @@ static char *extapwpaentlistname;
 static char *eapservercertname;
 static char *eapserverkeyname;
 
-static int opensslversionmajor;
-static int opensslversionminor;
-
 static SSL_CTX *tlsctx;
 static eaptlsctx_t *eaptlsctx;
 
@@ -5681,7 +5678,6 @@ snprintf(servermsg, SERVERMSG_MAX, "\e[?25l\nstart capturing (stop with ctrl+c)\
 	"DRIVER....................: %s\n"
 	"DRIVER VERSION............: %s\n"
 	"DRIVER FIRMWARE VERSION...: %s\n"
-	"openSSL version...........: %d.%d\n"
 	"ERRORMAX..................: %d errors\n"
 	"BPF code blocks...........: %" PRIu16 "\n"
 	"FILTERLIST ACCESS POINT...: %d entries\n"
@@ -5703,7 +5699,6 @@ snprintf(servermsg, SERVERMSG_MAX, "\e[?25l\nstart capturing (stop with ctrl+c)\
 	mac_orig[0], mac_orig[1], mac_orig[2], mac_orig[3], mac_orig[4], mac_orig[5],
 	mac_virt[0], mac_virt[1], mac_virt[2], mac_virt[3], mac_virt[4], mac_virt[5],
 	drivername, driverversion, driverfwversion,
-	opensslversionmajor, opensslversionminor,
 	maxerrorcount, bpf.len, filteraplistentries, filterclientlistentries, fimtempl, weakcandidate,
 	beaconextlistlen,
 	mac_myaphidden[0], mac_myaphidden[1], mac_myaphidden[2], mac_myaphidden[3], mac_myaphidden[4], mac_myaphidden[5],
@@ -7635,11 +7630,11 @@ if(gpiostatusled > 0)
 		nanosleep(&sleepled2, NULL);
 		}
 	}
-
-unsigned long opensslversion;
-opensslversion = OpenSSL_version_num();
-opensslversionmajor = (opensslversion & 0x10000000L) >> 28;
-opensslversionminor = (opensslversion & 0x01100000L) >> 20;
+#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+SSL_library_init();
+#else
+OPENSSL_init_ssl(0, NULL);
+#endif
 
 if((filteraplist = (maclist_t*)calloc((FILTERLIST_MAX +1), MACLIST_SIZE)) == NULL) return false;
 if((filterclientlist = (maclist_t*)calloc((FILTERLIST_MAX +1), MACLIST_SIZE)) == NULL) return false;
