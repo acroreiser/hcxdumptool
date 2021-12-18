@@ -1,5 +1,5 @@
 PRODUCTION		:= 0
-PRODUCTION_VERSION	:= 6.2.0
+PRODUCTION_VERSION	:= 6.2.5
 PRODUCTION_YEAR		:= 2021
 
 ifeq ($(PRODUCTION),1)
@@ -9,7 +9,7 @@ VERSION_TAG		:= $(shell git describe --tags || echo $(PRODUCTION_VERSION))
 endif
 VERSION_YEAR		:= $(shell echo $(PRODUCTION_YEAR))
 
-PREFIX		?= /usr/local
+PREFIX		?= /usr
 BINDIR		= $(DESTDIR)$(PREFIX)/bin
 
 HOSTOS		:= $(shell uname -s)
@@ -21,13 +21,14 @@ DEFS		= -DVERSION_TAG=\"$(VERSION_TAG)\" -DVERSION_YEAR=\"$(VERSION_YEAR)\"
 
 INSTALL		?= install
 INSTFLAGS	=
+PKG_CONFIG ?= pkg-config
 
 ifeq ($(HOSTOS), Linux)
 INSTFLAGS += -D
 endif
 
-OPENSSL_LIBS=$(shell pkg-config --libs openssl)
-OPENSSL_CFLAGS=$(shell pkg-config --cflags openssl)
+OPENSSL_LIBS=$(shell $(PKG_CONFIG) --libs openssl)
+OPENSSL_CFLAGS=$(shell $(PKG_CONFIG) --cflags openssl)
 
 TOOLS=
 TOOLS+=hcxdumptool

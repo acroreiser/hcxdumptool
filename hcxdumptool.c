@@ -58,7 +58,6 @@
 /*===========================================================================*/
 /* global var */
 
-static char *interfacename;
 static char *pcapngoutname;
 static char *gpsname;
 
@@ -73,6 +72,7 @@ static char *eapserverkeyname;
 static SSL_CTX *tlsctx;
 static eaptlsctx_t *eaptlsctx;
 
+static fscanlist_t *ptrfscanlist;
 static int fd_socket;
 static int fd_gps;
 static int fd_pcapng;
@@ -84,13 +84,13 @@ static int fd_socket_mcsrv;
 static struct sockaddr_in mcsrvaddress;
 static struct sockaddr_in srvaddress;
 static int fd_socket_srv;
-
 static int interfacetxpwr;
 
 static FILE *fh_nmea;
 static struct ifreq ifr_old;
 static struct iwreq iwr_old;
 
+static bool forceinterfaceflag;
 static bool targetscanflag;
 static bool totflag;
 static bool poweroffflag;
@@ -103,6 +103,7 @@ static bool gpsdflag;
 static bool infinityflag;
 static bool wpaentflag;
 static bool eapreqflag;
+static bool eapreqfollownakflag;
 static bool eaptunflag;
 static bool packetsentflag;
 static int sl;
@@ -124,11 +125,13 @@ static int gpscount;
 
 static int rcaorder;
 static unsigned int injectionhit;
+static unsigned int responsehit;
 static unsigned int injectioncount;
 static unsigned int injectionratio;
 
 static int gpiostatusled;
 static int gpiobutton;
+static int gpiostatusledflashinterval;
 
 static struct timespec sleepled;
 static struct timespec sleepled2;
@@ -137,7 +140,6 @@ static time_t tvlast_sec;
 static struct timeval tvold;
 static struct timeval tvtot;
 static struct timeval tvpacketsent;
-static int cpa;
 static uint32_t staytime;
 static uint16_t reasoncode;
 static uint32_t attackcount;
@@ -233,60 +235,20 @@ static uint8_t hdradiotap[] =
 };
 #define HDRRT_SIZE sizeof(hdradiotap)
 
-const int channelscanlist1[] =
-{
-1, 6, 11, 3, 5, 1, 6, 11, 2, 4, 1, 6, 11, 7, 9, 1,
-6, 11 ,8, 10, 1, 6, 11, 12, 13, 0
-};
+const char *channelscanlist1 = "1,6,11,3,5,1,6,11,2,4,1,6,11,7,9,1,6,11,8,10,1,6,11,12,13";
+const char *channelscanlist2 = "1,2,3,4,5,6,7,8,9,10,11,12,13";
+const char *channelscanlist3 = "36,40,44,48,52,56,60,64,100,104,108,112,116,120,124,128,132,136,140,144,149,153,157,161,165";
+const char *channelscanlist4 = "1,2,3,4,5,6,7,8,9,10,11,12,13,36,40,44,48,52,56,60,64,100,104,108,112,116,120,124,128,132,136,140,144,149,153,157,161,165";
 
-const int channelscanlist2[] =
-{
-1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0
-};
+static char interfacename[IFNAMSIZ +1];
 
-const int channelscanlist3[] =
-{
-36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128,
-132, 136, 140, 144, 149, 153, 157, 161, 165, 0
-};
-
-const int channelscanlist4[] =
-{
-1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
-36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128,
-132, 136, 140, 144, 149, 153, 157, 161, 165, 0
-};
-
-const int channelscanlist5[] =
-{
-201, 205, 209, 213, 217, 221, 225, 229, 233, 0
-};
-
-static int channelscanlist[256] =
-{
-1, 6, 11, 3, 5, 1, 6, 11, 2, 4, 1, 6, 11, 7, 9, 1,
-6, 11 ,8, 10, 1, 6, 11, 12, 13, 0, 0, 0, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-};
+static fscanlist_t fscanlist[FSCANLIST_MAX +1];
 
 static uint8_t myessid[] = { "home" };
 
 static const char weakcandidatedefault[] = { "12345678" };
 
-static char interfaceprotocol[IFNAMSIZ];
+static char interfaceprotocol[IFNAMSIZ +1];
 
 static char rssi;
 static uint32_t myoui_client;
@@ -438,7 +400,7 @@ while(len > 0)
 	if(written != (len +SERVERMSG_HEAD_SIZE)) errorcount++;
 	len -= iov[1].iov_len;
 	pcapng = &pcapng[iov[1].iov_len];
-  }
+	}
 return;
 }
 /*===========================================================================*/
@@ -468,16 +430,16 @@ static void globalclose()
 static struct ifreq ifr;
 static const char *gpsd_disable = "?WATCH={\"enable\":false}";
 
-printf("\nterminating...\e[?25h\n");
+fprintf(stdout, "\nterminating...\e[?25h\n");
 sync();
 errorcount -= radiotaperrorcount;
 errorcount -= gpserrorcount;
-if(errorcount == 1) printf("%d driver error encountered\n", errorcount);
-if(errorcount > 1) printf("%d driver errors encountered\n", errorcount);
-if(radiotaperrorcount == 1) printf("%d radiotap error encountered\n", radiotaperrorcount);
-if(radiotaperrorcount > 1) printf("%d radiotap errors encountered\n", radiotaperrorcount);
-if(gpserrorcount == 1) printf("%d GPS error encountered\n", gpserrorcount);
-if(gpserrorcount > 1) printf("%d GPS errors encountered\n", gpserrorcount);
+if(errorcount == 1) fprintf(stdout, "%d driver error encountered\n", errorcount);
+if(errorcount > 1) fprintf(stdout, "%d driver errors encountered\n", errorcount);
+if(radiotaperrorcount == 1) fprintf(stdout, "%d radiotap error encountered\n", radiotaperrorcount);
+if(radiotaperrorcount > 1) fprintf(stdout, "%d radiotap errors encountered\n", radiotaperrorcount);
+if(gpserrorcount == 1) fprintf(stdout, "%d GPS error encountered\n", gpserrorcount);
+if(gpserrorcount > 1) fprintf(stdout, "%d GPS errors encountered\n", gpserrorcount);
 
 if(((statusout &STATUS_SERVER) == STATUS_SERVER) && (fd_socket_mcsrv > 0)) serversendstatus("bye bye hcxdumptool clients...\n", sizeof ("bye bye hcxdumptool clients...\n"));
 if(gpiostatusled > 0)
@@ -498,7 +460,7 @@ if(fd_socket > 0)
 		if(setsockopt(fd_socket, SOL_SOCKET, SO_DETACH_FILTER, &bpf, sizeof(bpf)) < 0) perror("failed to free BPF code");
 		}
 	memset(&ifr, 0, sizeof(ifr));
-	strncpy( ifr.ifr_name, interfacename, IFNAMSIZ -1);
+	memcpy(&ifr.ifr_name, interfacename, IFNAMSIZ);
 	if(ioctl(fd_socket, SIOCGIFFLAGS, &ifr) < 0) perror("failed to get interface information");
 	ifr.ifr_flags = 0;
 	if(ioctl(fd_socket, SIOCSIFFLAGS, &ifr) < 0) perror("failed to set interface down");
@@ -556,7 +518,7 @@ if(poweroffflag == true)
 	{
 	if(system("poweroff") != 0)
 		{
-		printf("can't power off\n");
+		fprintf(stderr, "can't power off\n");
 		exit(EXIT_FAILURE);
 		}
 	}
@@ -564,7 +526,7 @@ if(rebootflag == true)
 	{
 	if(system("reboot") != 0)
 		{
-		printf("can't reboot\n");
+		fprintf(stderr, "can't reboot\n");
 		exit(EXIT_FAILURE);
 		}
 	}
@@ -793,7 +755,7 @@ while(c < bpf.len)
 		bpf.len = 0;
 		break;
 		}
-	sscanf(linein, "%" SCNu16 "%" SCNu8 "%" SCNu8 "%" SCNu32, &zeiger->code, &zeiger->jt,  &zeiger->jf,  &zeiger->k);
+	sscanf(linein, "%" SCNu16 "%" SCNu8 "%" SCNu8 "%" SCNu32, &zeiger->code, &zeiger->jt, &zeiger->jf, &zeiger->k);
 	zeiger++;
 	c++;
 	}
@@ -831,9 +793,11 @@ static inline void printreceivewatchdogwarnung()
 static char timestring[16];
 
 strftime(timestring, 16, "%H:%M:%S", localtime(&tv.tv_sec));
-snprintf(servermsg, SERVERMSG_MAX, "%s %3d WARNING RECEIVE TIMEOUT: NO PACKETS RECEIVED SINC %ld SECONDS\n", timestring, channelscanlist[cpa], tv.tv_sec - tvlast_sec);
+if(ptrfscanlist->channel >= 100) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d   WARNING RECEIVE TIMEOUT: NO PACKETS RECEIVED SINC %ld SECONDS\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel, tv.tv_sec -tvlast_sec);
+else if(ptrfscanlist->channel >= 10) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d    WARNING RECEIVE TIMEOUT: NO PACKETS RECEIVED SINC %ld SECONDS\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel, tv.tv_sec -tvlast_sec);
+else snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d     WARNING RECEIVE TIMEOUT: NO PACKETS RECEIVED SINC %ld SECONDS\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel, tv.tv_sec -tvlast_sec);
 if(((statusout &STATUS_SERVER) == STATUS_SERVER) && (fd_socket_mcsrv > 0)) serversendstatus(servermsg, strlen(servermsg));
-else printf("%s", servermsg);
+else fprintf(stdout, "%s", servermsg);
 return;
 }
 /*===========================================================================*/
@@ -842,10 +806,14 @@ static inline void printtimestatus()
 static char timestring[16];
 
 strftime(timestring, 16, "%H:%M:%S", localtime(&tv.tv_sec));
-snprintf(servermsg, SERVERMSG_MAX, "%s %3d ERROR:%d INCOMING:%" PRIu64 " AGE:%ld OUTGOING:%" PRIu64 " PMKIDROGUE:%d PMKID:%d M1M2ROGUE:%d M1M2:%d M2M3:%d M3M4:%d M3M4ZEROED:%d GPS:%d\n", timestring, channelscanlist[cpa],
-		errorcount, incomingcount, tv.tv_sec - tvlast_sec, outgoingcount,  pmkidroguecount, pmkidcount, eapolmp12roguecount, eapolmp12count, eapolmp23count, eapolmp34count, eapolmp34zeroedcount, gpscount);
+if(ptrfscanlist->channel >= 100) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d   ERROR:%d INCOMING:%" PRIu64 " AGE:%ld OUTGOING:%" PRIu64 " PMKIDROGUE:%d PMKID:%d M1M2ROGUE:%d M1M2:%d M2M3:%d M3M4:%d M3M4ZEROED:%d GPS:%d\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+				errorcount, incomingcount, tv.tv_sec -tvlast_sec, outgoingcount, pmkidroguecount, pmkidcount, eapolmp12roguecount, eapolmp12count, eapolmp23count, eapolmp34count, eapolmp34zeroedcount, gpscount);
+else if(ptrfscanlist->channel >= 10) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d    ERROR:%d INCOMING:%" PRIu64 " AGE:%ld OUTGOING:%" PRIu64 " PMKIDROGUE:%d PMKID:%d M1M2ROGUE:%d M1M2:%d M2M3:%d M3M4:%d M3M4ZEROED:%d GPS:%d\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+				errorcount, incomingcount, tv.tv_sec -tvlast_sec, outgoingcount, pmkidroguecount, pmkidcount, eapolmp12roguecount, eapolmp12count, eapolmp23count, eapolmp34count, eapolmp34zeroedcount, gpscount);
+else snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d     ERROR:%d INCOMING:%" PRIu64 " AGE:%ld OUTGOING:%" PRIu64 " PMKIDROGUE:%d PMKID:%d M1M2ROGUE:%d M1M2:%d M2M3:%d M3M4:%d M3M4ZEROED:%d GPS:%d\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+			errorcount, incomingcount, tv.tv_sec -tvlast_sec, outgoingcount, pmkidroguecount, pmkidcount, eapolmp12roguecount, eapolmp12count, eapolmp23count, eapolmp34count, eapolmp34zeroedcount, gpscount);
 if(((statusout &STATUS_SERVER) == STATUS_SERVER) && (fd_socket_mcsrv > 0)) serversendstatus(servermsg, strlen(servermsg));
-else printf("%s", servermsg);
+else fprintf(stdout, "%s", servermsg);
 return;
 }
 /*===========================================================================*/
@@ -854,9 +822,11 @@ static inline void printposition()
 static char timestring[16];
 
 strftime(timestring, 16, "%H:%M:%S", localtime(&tv.tv_sec));
-snprintf(servermsg, SERVERMSG_MAX, "%s %3d INFO GPS:%s\n", timestring, channelscanlist[cpa], &nmeasentence[7]);
+if(ptrfscanlist->channel >= 100) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d   INFO GPS:%s\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel, &nmeasentence[7]);
+else if(ptrfscanlist->channel >= 10) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d    INFO GPS:%s\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel, &nmeasentence[7]);
+else snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d     INFO GPS:%s\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel, &nmeasentence[7]);
 if(((statusout &STATUS_SERVER) == STATUS_SERVER) && (fd_socket_mcsrv > 0)) serversendstatus(servermsg, strlen(servermsg));
-else printf("%s", servermsg);
+else fprintf(stdout, "%s", servermsg);
 return;
 }
 /*===========================================================================*/
@@ -869,11 +839,17 @@ static char essidstring[ESSID_LEN_MAX *2 +1];
 strftime(timestring, 16, "%H:%M:%S", localtime(&tv.tv_sec));
 if((zeiger->essidlen == 0) || (zeiger->essid[0] == 0))
 	{
-	snprintf(servermsg, SERVERMSG_MAX, "%s %3d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x [HIDDEN %s]\n", timestring, channelscanlist[cpa],
-		toaddr[0], toaddr[1], toaddr[2], toaddr[3], toaddr[4], toaddr[5],
-		zeiger->ap[0], zeiger->ap[1], zeiger->ap[2], zeiger->ap[3], zeiger->ap[4], zeiger->ap[5], msg);
+	if(ptrfscanlist->channel >= 100) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x [HIDDEN %s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+					toaddr[0], toaddr[1], toaddr[2], toaddr[3], toaddr[4], toaddr[5],
+					zeiger->ap[0], zeiger->ap[1], zeiger->ap[2], zeiger->ap[3], zeiger->ap[4], zeiger->ap[5], msg);
+	else if(ptrfscanlist->channel >= 10) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d  %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x [HIDDEN %s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+					toaddr[0], toaddr[1], toaddr[2], toaddr[3], toaddr[4], toaddr[5],
+					zeiger->ap[0], zeiger->ap[1], zeiger->ap[2], zeiger->ap[3], zeiger->ap[4], zeiger->ap[5], msg);
+	else snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d   %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x [HIDDEN %s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+			toaddr[0], toaddr[1], toaddr[2], toaddr[3], toaddr[4], toaddr[5],
+			zeiger->ap[0], zeiger->ap[1], zeiger->ap[2], zeiger->ap[3], zeiger->ap[4], zeiger->ap[5], msg);
 	if(((statusout &STATUS_SERVER) == STATUS_SERVER) && (fd_socket_mcsrv > 0)) serversendstatus(servermsg, strlen(servermsg));
-	else printf("%s", servermsg);
+	else fprintf(stdout, "%s", servermsg);
 	return;
 	}
 p = 0;
@@ -888,11 +864,17 @@ for(c = 0; c < zeiger->essidlen; c++)
 	else essidstring[p++] = zeiger->essid[c];
 	}
 essidstring[p] = 0;
-snprintf(servermsg, SERVERMSG_MAX, "%s %3d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [%s]\n", timestring, channelscanlist[cpa],
-	toaddr[0], toaddr[1], toaddr[2], toaddr[3], toaddr[4], toaddr[5],
-	zeiger->ap[0], zeiger->ap[1], zeiger->ap[2], zeiger->ap[3], zeiger->ap[4], zeiger->ap[5], essidstring, msg);
+if(ptrfscanlist->channel >= 100) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [%s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+			toaddr[0], toaddr[1], toaddr[2], toaddr[3], toaddr[4], toaddr[5],
+			zeiger->ap[0], zeiger->ap[1], zeiger->ap[2], zeiger->ap[3], zeiger->ap[4], zeiger->ap[5], essidstring, msg);
+else if(ptrfscanlist->channel >= 10) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d  %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [%s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+			toaddr[0], toaddr[1], toaddr[2], toaddr[3], toaddr[4], toaddr[5],
+			zeiger->ap[0], zeiger->ap[1], zeiger->ap[2], zeiger->ap[3], zeiger->ap[4], zeiger->ap[5], essidstring, msg);
+else snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d   %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [%s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+		toaddr[0], toaddr[1], toaddr[2], toaddr[3], toaddr[4], toaddr[5],
+		zeiger->ap[0], zeiger->ap[1], zeiger->ap[2], zeiger->ap[3], zeiger->ap[4], zeiger->ap[5], essidstring, msg);
 if(((statusout &STATUS_SERVER) == STATUS_SERVER) && (fd_socket_mcsrv > 0)) serversendstatus(servermsg, strlen(servermsg));
-else printf("%s", servermsg);
+else fprintf(stdout, "%s", servermsg);
 return;
 }
 /*===========================================================================*/
@@ -1464,7 +1446,7 @@ while(pos < (mergedatalen -1))
 		}
 	if(setcnt == iesetlen)
 		{
-		if(destdatalen > destdatalenmax - mergedata[pos +1] -2) break;
+		if(destdatalen > destdatalenmax -mergedata[pos +1] -2) break;
 		memcpy(&destdata[destdatalen], &mergedata[pos], mergedata[pos +1] +2);
 		destdatalen += mergedata[pos +1] +2;
 		}
@@ -1505,7 +1487,7 @@ if(FD_ISSET(txsocket, &txfds))
 	if(txsize != write(txsocket, packetoutptr, txsize))
 		{
 		strftime(timestring, 16, "%H:%M:%S", localtime(&tv.tv_sec));
-		printf("%s %3d socket error: %s\n", timestring, channelscanlist[cpa], errormessage);
+		fprintf(stdout, "%s %d/%d socket error: %s\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel, errormessage);
 		errorcount++;
 		return;
 		}
@@ -1514,7 +1496,7 @@ if(FD_ISSET(txsocket, &txfds))
 	return;
 	}
 strftime(timestring, 16, "%H:%M:%S", localtime(&tv.tv_sec));
-printf("%s %3d driver is busy: %s\n", timestring, channelscanlist[cpa], errormessage);
+fprintf(stdout, "%s %d/%d driver is busy: %s\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel, errormessage);
 return;
 }
 /*===========================================================================*/
@@ -2153,7 +2135,7 @@ capap->beaconintervall = BEACONINTERVALL;
 capap->capabilities = 0x401;
 packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE] = 0;
 memcpy(&packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE], &proberesponsedata, PROBERESPONSE_SIZE);
-packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +0x15] = channelscanlist[cpa];
+packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +0x15] = ptrfscanlist->channel;
 send_packet(fd_socket, HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +PROBERESPONSE_SIZE, "failed to transmit proberesponse");
 return;
 }
@@ -2281,7 +2263,7 @@ else
 		memcpy(&packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +zeigerap->essidlen +PROBERESPONSE_HEAD_SIZE], &proberesponse_ie_wpapsk, PROBERESPONSE_IE_WPAPSK_SIZE);
 		}
 memcpy(&packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +zeigerap->essidlen +PROBERESPONSE_HEAD_SIZE +rsnwpa_size], &proberesponse_ie_extcap, PROBERESPONSE_IE_EXTCAP_SIZE);
-packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +zeigerap->essidlen +0x0c] = channelscanlist[cpa];
+packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +zeigerap->essidlen +0x0c] = ptrfscanlist->channel;
 send_packet(fd_socket, HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +zeigerap->essidlen +PROBERESPONSE_HEAD_SIZE +rsnwpa_size +PROBERESPONSE_IE_EXTCAP_SIZE, "failed to transmit proberesponse");
 return;
 }
@@ -2375,13 +2357,13 @@ memcpy(&packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE]
 if(((rgbeaconptr->akm & TAK_PMKSA) == TAK_PMKSA) || ((rgbeaconptr->akm & TAK_PMKSA256) == TAK_PMKSA256))
 	{
 	memcpy(&packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +rgbeaconptr->essidlen], &reactivebeaconwpaentdata, reactivebeaconwpaentdatalen);
-	packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +rgbeaconptr->essidlen +reactivebeaconwpaentdatachanoffset] = channelscanlist[cpa];
+	packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +rgbeaconptr->essidlen +reactivebeaconwpaentdatachanoffset] = ptrfscanlist->channel;
 	send_packet(fd_socket, HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +rgbeaconptr->essidlen +reactivebeaconwpaentdatalen, "failed to transmit internal beacon");
 	}
 else
 	{
 	memcpy(&packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +rgbeaconptr->essidlen], &reactivebeacondata, reactivebeacondatalen);
-	packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +rgbeaconptr->essidlen +reactivebeacondatachanoffset] = channelscanlist[cpa];
+	packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +rgbeaconptr->essidlen +reactivebeacondatachanoffset] = ptrfscanlist->channel;
 	send_packet(fd_socket, HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +rgbeaconptr->essidlen +reactivebeacondatalen, "failed to transmit internal beacon");
 	}
 rgbeaconptr++;
@@ -2419,13 +2401,13 @@ memcpy(&packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE]
 if(((rgbeaconlistptr->akm & TAK_PMKSA) == TAK_PMKSA) || ((rgbeaconlistptr->akm & TAK_PMKSA256) == TAK_PMKSA256))
 	{
 	memcpy(&packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +rgbeaconlistptr->essidlen], &reactivebeaconwpaentdata, reactivebeaconwpaentdatalen);
-	packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +rgbeaconlistptr->essidlen +reactivebeaconwpaentdatachanoffset] = channelscanlist[cpa];
+	packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +rgbeaconlistptr->essidlen +reactivebeaconwpaentdatachanoffset] = ptrfscanlist->channel;
 	send_packet(fd_socket, HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +rgbeaconlistptr->essidlen +reactivebeaconwpaentdatalen, "failed to transmit internal beacon");
 	}
 else
 	{
 	memcpy(&packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +rgbeaconlistptr->essidlen], &reactivebeacondata, reactivebeacondatalen);
-	packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +rgbeaconlistptr->essidlen +reactivebeacondatachanoffset] = channelscanlist[cpa];
+	packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +rgbeaconlistptr->essidlen +reactivebeacondatachanoffset] = ptrfscanlist->channel;
 	send_packet(fd_socket, HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +IETAG_SIZE +rgbeaconlistptr->essidlen +reactivebeacondatalen, "failed to transmit internal beacon");
 	}
 rgbeaconlistptr++;
@@ -2454,7 +2436,7 @@ capap->beaconintervall = BEACONINTERVALL;
 capap->capabilities = 0x411;
 packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE] = 0;
 memcpy(&packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE], &bcbeacondatahidden, bcbeacondatahiddenlen);
-packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +bcbeacondatahiddenchanoffset] = channelscanlist[cpa];
+packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +bcbeacondatahiddenchanoffset] = ptrfscanlist->channel;
 send_packet(fd_socket, HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +bcbeacondatahiddenlen, "failed to transmit internal beacon");
 return;
 }
@@ -2481,7 +2463,7 @@ capap->beaconintervall = BEACONINTERVALL;
 capap->capabilities = 0x401;
 packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE] = 0;
 memcpy(&packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE], &bcbeacondataopen, bcbeacondataopenlen);
-packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +bcbeacondataopenchanoffset] = channelscanlist[cpa];
+packetoutptr[HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +bcbeacondataopenchanoffset] = ptrfscanlist->channel;
 send_packet(fd_socket, HDRRT_SIZE +MAC_SIZE_NORM +CAPABILITIESAP_SIZE +bcbeacondataopenlen, "failed to transmit internal beacon");
 return;
 }
@@ -2577,7 +2559,7 @@ else
 	}
 if(data_len > 0) memcpy(&packetoutptr[HDRRT_SIZE +MAC_SIZE_QOS +eapdata_len], data, data_len);
 packetlenown = HDRRT_SIZE +MAC_SIZE_QOS +eapdata_len +data_len;
-send_packet(fd_socket,  HDRRT_SIZE +MAC_SIZE_QOS +eapdata_len +data_len, "failed to transmit EAP packet");
+send_packet(fd_socket, HDRRT_SIZE +MAC_SIZE_QOS +eapdata_len +data_len, "failed to transmit EAP packet");
 gettimeofday(&tvpacketsent, NULL);
 memcpy(packetsent, packetoutptr, packetlenown);
 packetsentlen = packetlenown;
@@ -2620,7 +2602,7 @@ if(FD_ISSET(fd_socket, &txfds))
 	if(packetsentlen != write(fd_socket, &packetsent, packetsentlen))
 		{
 		strftime(timestring, 16, "%H:%M:%S", localtime(&tv.tv_sec));
-		printf("%s %3d socket write error: failed to retransmit EAP packet\n",  timestring, channelscanlist[cpa]);
+		fprintf(stdout, "%s %d/%d socket write error: failed to retransmit EAP packet\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel);
 		errorcount++;
 		return;
 		}
@@ -2632,7 +2614,7 @@ if(FD_ISSET(fd_socket, &txfds))
 	return;
 	}
 strftime(timestring, 16, "%H:%M:%S", localtime(&tv.tv_sec));
-printf("%s %3d driver is busy: failed to retransmit EAP packet\n",  timestring, channelscanlist[cpa]);
+fprintf(stdout, "%s %d/%d driver is busy: failed to retransmit EAP packet\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel);
 return;
 }
 /*===========================================================================*/
@@ -2822,20 +2804,36 @@ if(essidstring[0] == 0)
 strftime(timestring, 16, "%H:%M:%S", localtime(&tv.tv_sec));
 if(essidstring[0] != 0)
 	{
-	snprintf(servermsg, SERVERMSG_MAX, "%s %3d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [%s]\n", timestring, channelscanlist[cpa],
-		zeiger->client[0], zeiger->client[1], zeiger->client[2], zeiger->client[3], zeiger->client[4], zeiger->client[5],
-		zeiger->ap[0], zeiger->ap[1], zeiger->ap[2], zeiger->ap[3], zeiger->ap[4], zeiger->ap[5],
-		essidstring, msg);
+	if(ptrfscanlist->channel >= 100) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [%s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+						zeiger->client[0], zeiger->client[1], zeiger->client[2], zeiger->client[3], zeiger->client[4], zeiger->client[5],
+						zeiger->ap[0], zeiger->ap[1], zeiger->ap[2], zeiger->ap[3], zeiger->ap[4], zeiger->ap[5],
+						essidstring, msg);
+	else if(ptrfscanlist->channel >= 10) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d  %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [%s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+						zeiger->client[0], zeiger->client[1], zeiger->client[2], zeiger->client[3], zeiger->client[4], zeiger->client[5],
+						zeiger->ap[0], zeiger->ap[1], zeiger->ap[2], zeiger->ap[3], zeiger->ap[4], zeiger->ap[5],
+						essidstring, msg);
+	else snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d   %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [%s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+						zeiger->client[0], zeiger->client[1], zeiger->client[2], zeiger->client[3], zeiger->client[4], zeiger->client[5],
+						zeiger->ap[0], zeiger->ap[1], zeiger->ap[2], zeiger->ap[3], zeiger->ap[4], zeiger->ap[5],
+						essidstring, msg);
 	}
 else
 	{
-	snprintf(servermsg, SERVERMSG_MAX, "%s %3d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x [ESSID NOT RECEIVED YET] [%s]\n", timestring, channelscanlist[cpa],
-		zeiger->client[0], zeiger->client[1], zeiger->client[2], zeiger->client[3], zeiger->client[4], zeiger->client[5],
-		zeiger->ap[0], zeiger->ap[1], zeiger->ap[2], zeiger->ap[3], zeiger->ap[4], zeiger->ap[5],
-		msg);
+	if(ptrfscanlist->channel >= 100) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x [ESSID NOT RECEIVED YET] [%s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+						zeiger->client[0], zeiger->client[1], zeiger->client[2], zeiger->client[3], zeiger->client[4], zeiger->client[5],
+						zeiger->ap[0], zeiger->ap[1], zeiger->ap[2], zeiger->ap[3], zeiger->ap[4], zeiger->ap[5],
+						msg);
+	else if(ptrfscanlist->channel >= 10) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d  %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x [ESSID NOT RECEIVED YET] [%s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+						zeiger->client[0], zeiger->client[1], zeiger->client[2], zeiger->client[3], zeiger->client[4], zeiger->client[5],
+						zeiger->ap[0], zeiger->ap[1], zeiger->ap[2], zeiger->ap[3], zeiger->ap[4], zeiger->ap[5],
+						msg);
+	else snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d   %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x [ESSID NOT RECEIVED YET] [%s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+						zeiger->client[0], zeiger->client[1], zeiger->client[2], zeiger->client[3], zeiger->client[4], zeiger->client[5],
+						zeiger->ap[0], zeiger->ap[1], zeiger->ap[2], zeiger->ap[3], zeiger->ap[4], zeiger->ap[5],
+						msg);
 	}
 if(((statusout &STATUS_SERVER) == STATUS_SERVER) && (fd_socket_mcsrv > 0)) serversendstatus(servermsg, strlen(servermsg));
-else printf("%s", servermsg);
+else fprintf(stdout, "%s", servermsg);
 return;
 }
 /*===========================================================================*/
@@ -2861,9 +2859,15 @@ switch(type)
 	case EAP_TYPE_NOTIFY:
 		return "NOTIFY";
 	case EAP_TYPE_PWD:
-		return "PWD";
+		return "EAP-PWD";
 	case EAP_TYPE_SIM:
-		return "SIM";
+		return "EAP-SIM";
+	case EAP_TYPE_AKA:
+		return "EAP-AKA";
+	case EAP_TYPE_AKA1:
+		return "EAP-AKA'";
+	case EAP_TYPE_MD5:
+		return "EAP-MD5-CHALLENGE";
 	default:
 		sprintf(outstr, "%d", type);
 		return outstr;
@@ -3107,12 +3111,24 @@ if((macfrx->to_ds == 0) && (macfrx->from_ds == 1))
 return;
 }
 /*===========================================================================*/
+static inline int eapreqlist_gettype(eapctx_t *eapctx, uint8_t type)
+{
+static int i;
+for(i = eapctx->reqstate; i < eapreqentries; i++)
+	{
+	if(eapreqlist[i].type == type)
+		return i;
+	}
+return 0;
+}
+/*===========================================================================*/
 static inline void process80211exteap_resp(uint16_t exteaplen)
 {
 static ownlist_t *zeiger;
 static uint8_t *eapauthptr;
 static exteap_t *exteap;
 static eapctx_t *eapctx;
+static int eapreqentry;
 eapauthptr = payloadptr +LLC_SIZE +EAPAUTH_SIZE;
 exteap = (exteap_t*)eapauthptr;
 char outstr[DEBUGMSG_MAX];
@@ -3143,9 +3159,15 @@ if((macfrx->to_ds == 1) && (macfrx->from_ds == 0))
 			if((((exteap->type != EAP_TYPE_NAK) && ((statusout &STATUS_EAP) == STATUS_EAP)) || ((exteap->type == EAP_TYPE_NAK) && ((statusout &STATUS_EAP_NAK) == STATUS_EAP_NAK))) && (exteap->id == eapctx->id))
 				{
 #ifdef DEBUG_TLS
-				sprintf(outstr, "EAP RESPONSE TYPE %s EAPTIME:%" PRIu64 " ID:%d REQ:%d%s%s" , eap_type2name(exteap->type), timestamp -lastauthtimestamp, exteap->id, zeiger->eapctx.reqstate, zeiger->eapctx.tlstun ? " TLS":"", (zeiger->eapctx.reqstate == (eapreqentries -1)) ? " FIN" : "");
+				if(exteap->type == EAP_TYPE_NAK)
+					sprintf(outstr, "EAP RESPONSE TYPE NAK:%s EAPTIME:%" PRIu64 " ID:%d REQ:%d%s%s" , eap_type2name(exteap->data[0]), timestamp -lastauthtimestamp, exteap->id, zeiger->eapctx.reqstate, zeiger->eapctx.tlstun ? " TLS":"", (zeiger->eapctx.reqstate == (eapreqentries -1)) ? " FIN" : "");
+				else
+					sprintf(outstr, "EAP RESPONSE TYPE %s EAPTIME:%" PRIu64 " ID:%d REQ:%d%s%s" , eap_type2name(exteap->type), timestamp -lastauthtimestamp, exteap->id, zeiger->eapctx.reqstate, zeiger->eapctx.tlstun ? " TLS":"", (zeiger->eapctx.reqstate == (eapreqentries -1)) ? " FIN" : "");
 #else
-				sprintf(outstr, "EAP RESPONSE TYPE %s EAPTIME:%" PRIu64 " REQ:%d%s%s" , eap_type2name(exteap->type), timestamp -lastauthtimestamp, zeiger->eapctx.reqstate, zeiger->eapctx.tlstun ? " TLS":"", (zeiger->eapctx.reqstate == (eapreqentries -1)) ? " FIN" : "");
+				if(exteap->type == EAP_TYPE_NAK)
+					sprintf(outstr, "EAP RESPONSE TYPE NAK:%s EAPTIME:%" PRIu64 " REQ:%d%s%s" , eap_type2name(exteap->data[0]), timestamp -lastauthtimestamp, zeiger->eapctx.reqstate, zeiger->eapctx.tlstun ? " TLS":"", (zeiger->eapctx.reqstate == (eapreqentries -1)) ? " FIN" : "");
+				else
+					sprintf(outstr, "EAP RESPONSE TYPE %s EAPTIME:%" PRIu64 " REQ:%d%s%s" , eap_type2name(exteap->type), timestamp -lastauthtimestamp, zeiger->eapctx.reqstate, zeiger->eapctx.tlstun ? " TLS":"", (zeiger->eapctx.reqstate == (eapreqentries -1)) ? " FIN" : "");
 #endif
 				printown(zeiger, outstr);
 				}
@@ -3176,6 +3198,11 @@ if((macfrx->to_ds == 1) && (macfrx->from_ds == 0))
 				}
 			if(exteap->id == eapctx->id)
 				{
+				if((exteap->type == EAP_TYPE_NAK) && (eapreqfollownakflag == true))
+					{
+					eapreqentry = eapreqlist_gettype(eapctx, exteap->data[0]);
+					if(eapreqentry > 0) eapctx->reqstate = eapreqentry -1;
+					}
 				while(++eapctx->reqstate < eapreqentries)
 					{
 					if((eapreqlist[eapctx->reqstate].mode == EAPREQLIST_MODE_TLS) && (eapctx->tlstun == false)) continue;
@@ -3411,7 +3438,7 @@ for(zeiger = ownlist; zeiger < ownlist +OWNLIST_MAX; zeiger++)
 			}
 		else
 			{
-			tlsflags |=  (EAP_TLSFLAGS_MORE_FRAGMENTS);
+			tlsflags |= (EAP_TLSFLAGS_MORE_FRAGMENTS);
 			eaptlsctx->buflen = EAP_LEN_MAX -EXTEAP_SIZE -EAP_TLSFLAGS_SIZE -EAP_TLSLENGTH_SIZE;
 			}
 		
@@ -3539,7 +3566,7 @@ for(zeiger = ownlist; zeiger < ownlist +OWNLIST_MAX; zeiger++)
 		{
 		res = SSL_read(eaptlsctx->ssl, inbuf, sizeof(inbuf));
 #ifdef DEBUG_TLS
-		snprintf(debugmsg, DEBUGMSG_MAX, "TLS connection read  len=%d, id=%d:", res, eapctx->id);
+		snprintf(debugmsg, DEBUGMSG_MAX, "TLS connection read len=%d, id=%d:", res, eapctx->id);
 		debugprint(res, inbuf, debugmsg);
 #endif
 		if(res > 0)
@@ -3823,28 +3850,52 @@ if(essidstring[0] != 0)
 	{
 	if(pmkflag == false)
 		{
-		snprintf(servermsg, SERVERMSG_MAX, "%s %3d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [EAPOL:%s EAPOLTIME:%" PRIu64 " RC:%" PRIu64 " KDV:%d]\n", timestring, channelscanlist[cpa],
-			client[0], client[1], client[2], client[3], client[4], client[5],
-			ap[0], ap[1], ap[2], ap[3], ap[4], ap[5],
-			essidstring, msg, timegap, rc, kdv);
+		if(ptrfscanlist->channel >= 100) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [EAPOL:%s EAPOLTIME:%" PRIu64 " RC:%" PRIu64 " KDV:%d]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+							client[0], client[1], client[2], client[3], client[4], client[5],
+							ap[0], ap[1], ap[2], ap[3], ap[4], ap[5],
+							essidstring, msg, timegap, rc, kdv);
+		else if(ptrfscanlist->channel >= 10) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d  %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [EAPOL:%s EAPOLTIME:%" PRIu64 " RC:%" PRIu64 " KDV:%d]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+							client[0], client[1], client[2], client[3], client[4], client[5],
+							ap[0], ap[1], ap[2], ap[3], ap[4], ap[5],
+							essidstring, msg, timegap, rc, kdv);
+		else snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d   %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [EAPOL:%s EAPOLTIME:%" PRIu64 " RC:%" PRIu64 " KDV:%d]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+				client[0], client[1], client[2], client[3], client[4], client[5],
+				ap[0], ap[1], ap[2], ap[3], ap[4], ap[5],
+				essidstring, msg, timegap, rc, kdv);
 		}
 	else
 		{
-		snprintf(servermsg, SERVERMSG_MAX, "%s %3d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [EAPOL:%s EAPOLTIME:%" PRIu64 " RC:%" PRIu64 " KDV:%d PSK:%s]\n", timestring, channelscanlist[cpa],
-			client[0], client[1], client[2], client[3], client[4], client[5],
-			ap[0], ap[1], ap[2], ap[3], ap[4], ap[5],
-			essidstring, msg, timegap, rc, kdv, weakcandidate);
+		if(ptrfscanlist->channel >= 100) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [EAPOL:%s EAPOLTIME:%" PRIu64 " RC:%" PRIu64 " KDV:%d PSK:%s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+							client[0], client[1], client[2], client[3], client[4], client[5],
+							ap[0], ap[1], ap[2], ap[3], ap[4], ap[5],
+							essidstring, msg, timegap, rc, kdv, weakcandidate);
+		else if(ptrfscanlist->channel >= 10) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d  %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [EAPOL:%s EAPOLTIME:%" PRIu64 " RC:%" PRIu64 " KDV:%d PSK:%s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+							client[0], client[1], client[2], client[3], client[4], client[5],
+							ap[0], ap[1], ap[2], ap[3], ap[4], ap[5],
+							essidstring, msg, timegap, rc, kdv, weakcandidate);
+		else snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d   %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [EAPOL:%s EAPOLTIME:%" PRIu64 " RC:%" PRIu64 " KDV:%d PSK:%s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+				client[0], client[1], client[2], client[3], client[4], client[5],
+				ap[0], ap[1], ap[2], ap[3], ap[4], ap[5],
+				essidstring, msg, timegap, rc, kdv, weakcandidate);
 		}
 	}
 else
 	{
-	snprintf(servermsg, SERVERMSG_MAX, "%s %3d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x [ESSID NOT RECEIVED YET] [EAPOL:%s EAPOLTIME:%" PRIu64 " RC:%" PRIu64 " KDV:%d]\n", timestring, channelscanlist[cpa],
-		client[0], client[1], client[2], client[3], client[4], client[5],
-		ap[0], ap[1], ap[2], ap[3], ap[4], ap[5],
-		msg, timegap, rc, kdv);
+	if(ptrfscanlist->channel >= 100) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x [ESSID NOT RECEIVED YET] [EAPOL:%s EAPOLTIME:%" PRIu64 " RC:%" PRIu64 " KDV:%d]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+						client[0], client[1], client[2], client[3], client[4], client[5],
+						ap[0], ap[1], ap[2], ap[3], ap[4], ap[5],
+						msg, timegap, rc, kdv);
+	else if(ptrfscanlist->channel >= 100) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d  %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x [ESSID NOT RECEIVED YET] [EAPOL:%s EAPOLTIME:%" PRIu64 " RC:%" PRIu64 " KDV:%d]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+						client[0], client[1], client[2], client[3], client[4], client[5],
+						ap[0], ap[1], ap[2], ap[3], ap[4], ap[5],
+						msg, timegap, rc, kdv);
+	else snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d   %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x [ESSID NOT RECEIVED YET] [EAPOL:%s EAPOLTIME:%" PRIu64 " RC:%" PRIu64 " KDV:%d]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+			client[0], client[1], client[2], client[3], client[4], client[5],
+			ap[0], ap[1], ap[2], ap[3], ap[4], ap[5],
+			msg, timegap, rc, kdv);
 	}
 if(((statusout &STATUS_SERVER) == STATUS_SERVER) && (fd_socket_mcsrv > 0)) serversendstatus(servermsg, strlen(servermsg));
-else printf("%s", servermsg);
+else fprintf(stdout, "%s", servermsg);
 return;
 }
 /*===========================================================================*/
@@ -4073,34 +4124,70 @@ if(essidstring[0] != 0)
 	{
 	if(pmkflag == false)
 		{
-		snprintf(servermsg, SERVERMSG_MAX, "%s %3d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [%s:%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x KDV:%d]\n", timestring, channelscanlist[cpa],
-			client[0], client[1], client[2], client[3], client[4], client[5],
-			ap[0], ap[1], ap[2], ap[3], ap[4], ap[5], essidstring, msg,
-			pmkid[0], pmkid[1], pmkid[2], pmkid[3], pmkid[4], pmkid[5], pmkid[6], pmkid[7],
-			pmkid[8], pmkid[9], pmkid[10], pmkid[11], pmkid[12], pmkid[13], pmkid[14], pmkid[15],
-			kdv);
+		if(ptrfscanlist->channel >= 100) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [%s:%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x KDV:%d]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+							client[0], client[1], client[2], client[3], client[4], client[5],
+							ap[0], ap[1], ap[2], ap[3], ap[4], ap[5], essidstring, msg,
+							pmkid[0], pmkid[1], pmkid[2], pmkid[3], pmkid[4], pmkid[5], pmkid[6], pmkid[7],
+							pmkid[8], pmkid[9], pmkid[10], pmkid[11], pmkid[12], pmkid[13], pmkid[14], pmkid[15],
+							kdv);
+		else if(ptrfscanlist->channel >= 10) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d  %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [%s:%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x KDV:%d]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+							client[0], client[1], client[2], client[3], client[4], client[5],
+							ap[0], ap[1], ap[2], ap[3], ap[4], ap[5], essidstring, msg,
+							pmkid[0], pmkid[1], pmkid[2], pmkid[3], pmkid[4], pmkid[5], pmkid[6], pmkid[7],
+							pmkid[8], pmkid[9], pmkid[10], pmkid[11], pmkid[12], pmkid[13], pmkid[14], pmkid[15],
+							kdv);
+		else snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d   %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [%s:%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x KDV:%d]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+				client[0], client[1], client[2], client[3], client[4], client[5],
+				ap[0], ap[1], ap[2], ap[3], ap[4], ap[5], essidstring, msg,
+				pmkid[0], pmkid[1], pmkid[2], pmkid[3], pmkid[4], pmkid[5], pmkid[6], pmkid[7],
+				pmkid[8], pmkid[9], pmkid[10], pmkid[11], pmkid[12], pmkid[13], pmkid[14], pmkid[15],
+				kdv);
 		}
 	else
 		{
-		snprintf(servermsg, SERVERMSG_MAX, "%s %3d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [%s:%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x KDV:%d PSK:%s]\n", timestring, channelscanlist[cpa],
-			client[0], client[1], client[2], client[3], client[4], client[5],
-			ap[0], ap[1], ap[2], ap[3], ap[4], ap[5], essidstring, msg,
-			pmkid[0], pmkid[1], pmkid[2], pmkid[3], pmkid[4], pmkid[5], pmkid[6], pmkid[7],
-			pmkid[8], pmkid[9], pmkid[10], pmkid[11], pmkid[12], pmkid[13], pmkid[14], pmkid[15],
-			kdv, weakcandidate);
+		if(ptrfscanlist->channel >= 100) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [%s:%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x KDV:%d PSK:%s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+							client[0], client[1], client[2], client[3], client[4], client[5],
+							ap[0], ap[1], ap[2], ap[3], ap[4], ap[5], essidstring, msg,
+							pmkid[0], pmkid[1], pmkid[2], pmkid[3], pmkid[4], pmkid[5], pmkid[6], pmkid[7],
+							pmkid[8], pmkid[9], pmkid[10], pmkid[11], pmkid[12], pmkid[13], pmkid[14], pmkid[15],
+							kdv, weakcandidate);
+		else if(ptrfscanlist->channel >= 10) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d  %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [%s:%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x KDV:%d PSK:%s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+							client[0], client[1], client[2], client[3], client[4], client[5],
+							ap[0], ap[1], ap[2], ap[3], ap[4], ap[5], essidstring, msg,
+							pmkid[0], pmkid[1], pmkid[2], pmkid[3], pmkid[4], pmkid[5], pmkid[6], pmkid[7],
+							pmkid[8], pmkid[9], pmkid[10], pmkid[11], pmkid[12], pmkid[13], pmkid[14], pmkid[15],
+							kdv, weakcandidate);
+		else snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d   %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %s [%s:%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x KDV:%d PSK:%s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+				client[0], client[1], client[2], client[3], client[4], client[5],
+				ap[0], ap[1], ap[2], ap[3], ap[4], ap[5], essidstring, msg,
+				pmkid[0], pmkid[1], pmkid[2], pmkid[3], pmkid[4], pmkid[5], pmkid[6], pmkid[7],
+				pmkid[8], pmkid[9], pmkid[10], pmkid[11], pmkid[12], pmkid[13], pmkid[14], pmkid[15],
+				kdv, weakcandidate);
 		}
 	}
 else
 	{
-	snprintf(servermsg, SERVERMSG_MAX, "%s %3d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x [ESSID NOT RECEIVED YET] [%s:%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x KDV:%d]\n", timestring, channelscanlist[cpa],
-		client[0], client[1], client[2], client[3], client[4], client[5],
-		ap[0], ap[1], ap[2], ap[3], ap[4], ap[5], msg,
-		pmkid[0], pmkid[1], pmkid[2], pmkid[3], pmkid[4], pmkid[5], pmkid[6], pmkid[7],
-		pmkid[8], pmkid[9], pmkid[10], pmkid[11], pmkid[12], pmkid[13], pmkid[14], pmkid[15],
-		kdv);
+	if(ptrfscanlist->channel >= 100) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x [ESSID NOT RECEIVED YET] [%s:%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x KDV:%d]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+						client[0], client[1], client[2], client[3], client[4], client[5],
+						ap[0], ap[1], ap[2], ap[3], ap[4], ap[5], msg,
+						pmkid[0], pmkid[1], pmkid[2], pmkid[3], pmkid[4], pmkid[5], pmkid[6], pmkid[7],
+						pmkid[8], pmkid[9], pmkid[10], pmkid[11], pmkid[12], pmkid[13], pmkid[14], pmkid[15],
+						kdv);
+	else if(ptrfscanlist->channel >= 100) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d  %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x [ESSID NOT RECEIVED YET] [%s:%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x KDV:%d]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+						client[0], client[1], client[2], client[3], client[4], client[5],
+						ap[0], ap[1], ap[2], ap[3], ap[4], ap[5], msg,
+						pmkid[0], pmkid[1], pmkid[2], pmkid[3], pmkid[4], pmkid[5], pmkid[6], pmkid[7],
+						pmkid[8], pmkid[9], pmkid[10], pmkid[11], pmkid[12], pmkid[13], pmkid[14], pmkid[15],
+						kdv);
+	else snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d   %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x [ESSID NOT RECEIVED YET] [%s:%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x KDV:%d]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+			client[0], client[1], client[2], client[3], client[4], client[5],
+			ap[0], ap[1], ap[2], ap[3], ap[4], ap[5], msg,
+			pmkid[0], pmkid[1], pmkid[2], pmkid[3], pmkid[4], pmkid[5], pmkid[6], pmkid[7],
+			pmkid[8], pmkid[9], pmkid[10], pmkid[11], pmkid[12], pmkid[13], pmkid[14], pmkid[15],
+			kdv);
 	}
 if(((statusout &STATUS_SERVER) == STATUS_SERVER) && (fd_socket_mcsrv > 0)) serversendstatus(servermsg, strlen(servermsg));
-else printf("%s", servermsg);
+else fprintf(stdout, "%s", servermsg);
 return;
 }
 /*===========================================================================*/
@@ -4364,14 +4451,17 @@ if(memcmp(&mac_myclient, macfrx->addr1, 6) == 0)
 	return;
 	}
 if(payloadlen < ACTIONFRAME_SIZE) return;
-actf = (actf_t*)payloadptr;
-if(actf->categoriecode == CAT_VENDOR)
+if(fd_pcapng > 0)
 	{
-	if(fd_pcapng > 0)
+	actf = (actf_t*)payloadptr;
+	if(actf->categoriecode == CAT_VENDOR)
 		{
 		if((pcapngframesout &PCAPNG_FRAME_VENDOR) == PCAPNG_FRAME_VENDOR) writeepb(fd_pcapng);
 		}
-	return;
+	else if(actf->categoriecode == CAT_RADIO_MEASUREMENT)
+		{
+		if((pcapngframesout &PCAPNG_FRAME_MANAGEMENT) == PCAPNG_FRAME_MANAGEMENT) writeepb(fd_pcapng);
+		}
 	}
 if(((timestamp -lastauthtimestamp) > eapoltimeoutvalue) || ((lastauthkeyver == 0) && ((timestamp -lastauthtimestamp) > eapoleaptimeoutvalue))) return;
 if(memcmp(&lastauthap, macfrx->addr1, 6) != 0) return;
@@ -5039,13 +5129,16 @@ zeiger->timestamp = timestamp;
 memcpy(zeiger->ap, macfrx->addr1, 6);
 zeiger->essidlen = tags.essidlen;
 memcpy(zeiger->essid, tags.essid, tags.essidlen);
-if((attackstatus &DISABLE_CLIENT_ATTACKS) != DISABLE_CLIENT_ATTACKS) send_probe_resp(macfrx->addr2, zeiger);
+if((attackstatus &DISABLE_CLIENT_ATTACKS) != DISABLE_CLIENT_ATTACKS)
+	{
+	send_probe_resp(macfrx->addr2, zeiger);
+	if((statusout &STATUS_ROGUE) == STATUS_ROGUE) printstatusap(macfrx->addr2, zeiger, "ROGUE PROBEREQPONSE");
+	}
 memcpy(&mac_myprclient, macfrx->addr2, 6);
 if(fd_pcapng > 0)
 	{
 	if((pcapngframesout &PCAPNG_FRAME_MANAGEMENT) == PCAPNG_FRAME_MANAGEMENT) writeepb(fd_pcapng);
 	}
-if((statusout &STATUS_ROGUE) == STATUS_ROGUE) printstatusap(macfrx->addr2, zeiger, "ROGUE PROBEREQPONSE");
 qsort(rglist, zeiger -rglist +1, MACESSIDLIST_SIZE, sort_macessidlist_by_time);
 return;
 }
@@ -5076,13 +5169,16 @@ zeiger->ap[5] = mynic_ap & 0xff;
 mynic_ap++;
 zeiger->essidlen = tags.essidlen;
 memcpy(zeiger->essid, tags.essid, tags.essidlen);
-if((attackstatus &DISABLE_CLIENT_ATTACKS) != DISABLE_CLIENT_ATTACKS) send_probe_resp(macfrx->addr2, zeiger);
+if((attackstatus &DISABLE_CLIENT_ATTACKS) != DISABLE_CLIENT_ATTACKS)
+	{
+	send_probe_resp(macfrx->addr2, zeiger);
+	if((statusout &STATUS_ROGUE) == STATUS_ROGUE) printstatusap(macfrx->addr2, zeiger, "ROGUE PROBERESPONSE");
+	}
 memcpy(&mac_myprclient, macfrx->addr2, 6);
 if(fd_pcapng > 0)
 	{
 	if((pcapngframesout &PCAPNG_FRAME_MANAGEMENT) == PCAPNG_FRAME_MANAGEMENT) writeepb(fd_pcapng);
 	}
-if((statusout &STATUS_ROGUE) == STATUS_ROGUE) printstatusap(macfrx->addr2, zeiger, "ROGUE PROBERESPONSE");
 qsort(rglist, zeiger -rglist +1, MACESSIDLIST_SIZE, sort_macessidlist_by_time);
 return;
 }
@@ -5110,7 +5206,7 @@ for(zeiger = aplist; zeiger < aplist +APLIST_MAX; zeiger++)
 		zeiger->timestamp = timestamp;
 		memcpy(zeiger->ap, macfrx->addr2, 6);
 		if(tags.channel != 0) zeiger->channel = tags.channel;
-		else zeiger->channel = channelscanlist[cpa];
+		else zeiger->channel = ptrfscanlist->channel;
 		zeiger->kdversion = tags.kdversion;
 		zeiger->groupcipher = tags.groupcipher;
 		zeiger->cipher = tags.cipher;
@@ -5136,7 +5232,7 @@ zeiger->timestamp = timestamp;
 zeiger->status = AP_PROBE_RESP;
 memcpy(zeiger->ap, macfrx->addr2, 6);
 if(tags.channel != 0) zeiger->channel = tags.channel;
-else zeiger->channel = channelscanlist[cpa];
+else zeiger->channel = ptrfscanlist->channel;
 zeiger->kdversion = tags.kdversion;
 zeiger->groupcipher = tags.groupcipher;
 zeiger->cipher = tags.cipher;
@@ -5176,7 +5272,11 @@ memcpy(zeiger->id, pagidptr, 64);
 if(((statusout &STATUS_AP_BEACON_PROBE) == STATUS_AP_BEACON_PROBE) || ((statusout &STATUS_ROGUE) == STATUS_ROGUE) || ((statusout &STATUS_ASSOCIATION) == STATUS_ASSOCIATION))
 	{
 	strftime(timestring, 16, "%H:%M:%S", localtime(&tv.tv_sec));
-	snprintf(servermsg, SERVERMSG_MAX, "%s %3d              %02x%02x%02x%02x%02x%02x [PWNAGOTCHI ID:%.*s]\n", timestring, channelscanlist[cpa],
+	if(ptrfscanlist->channel >= 100) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d                            %02x%02x%02x%02x%02x%02x [PWNAGOTCHI ID:%.*s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+							macfrx->addr2[0], macfrx->addr2[1], macfrx->addr2[2], macfrx->addr2[3], macfrx->addr2[4], macfrx->addr2[5], 64, zeiger->id);
+	else if(ptrfscanlist->channel >= 10) snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d                             %02x%02x%02x%02x%02x%02x [PWNAGOTCHI ID:%.*s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
+							macfrx->addr2[0], macfrx->addr2[1], macfrx->addr2[2], macfrx->addr2[3], macfrx->addr2[4], macfrx->addr2[5], 64, zeiger->id);
+	else snprintf(servermsg, SERVERMSG_MAX, "%s %d/%d                              %02x%02x%02x%02x%02x%02x [PWNAGOTCHI ID:%.*s]\n", timestring, ptrfscanlist->frequency, ptrfscanlist->channel,
 			macfrx->addr2[0], macfrx->addr2[1], macfrx->addr2[2], macfrx->addr2[3], macfrx->addr2[4], macfrx->addr2[5], 64, zeiger->id);
 	if(((statusout &STATUS_SERVER) == STATUS_SERVER) && (fd_socket_mcsrv > 0)) serversendstatus(servermsg, strlen(servermsg));
 	else printf("%s", servermsg);
@@ -5248,7 +5348,7 @@ for(zeiger = aplist; zeiger < aplist +APLIST_MAX; zeiger++)
 		zeiger->timestamp = timestamp;
 		memcpy(zeiger->ap, macfrx->addr2, 6);
 		if(tags.channel != 0) zeiger->channel = tags.channel;
-		else zeiger->channel = channelscanlist[cpa];
+		else zeiger->channel = ptrfscanlist->channel;
 		zeiger->kdversion = tags.kdversion;
 		zeiger->groupcipher = tags.groupcipher;
 		zeiger->cipher = tags.cipher;
@@ -5267,7 +5367,7 @@ for(zeiger = aplist; zeiger < aplist +APLIST_MAX; zeiger++)
 		if(memcmp(&mac_null, zeiger->client, 6) != 0) send_deauthentication2client(zeiger->client, zeiger->ap, reasoncode);
 		send_deauthentication2client(macfrx->addr1, macfrx->addr2, reasoncode);
 		}
-	if((channelscanlist[cpa] == zeiger->channel) && (zeiger->status < AP_M2M3) && (zeiger->count <= attackstopcount))
+	if((ptrfscanlist->channel == zeiger->channel) && (zeiger->status < AP_M2M3) && (zeiger->count <= attackstopcount))
 		{
 		if((attackstatus &DISABLE_AP_ATTACKS) != DISABLE_AP_ATTACKS)
 			{
@@ -5315,7 +5415,7 @@ zeiger->timestamp = timestamp;
 zeiger->status = AP_BEACON;
 memcpy(zeiger->ap, macfrx->addr2, 6);
 if(tags.channel != 0) zeiger->channel = tags.channel;
-else zeiger->channel = channelscanlist[cpa];
+else zeiger->channel = ptrfscanlist->channel;
 zeiger->kdversion = tags.kdversion;
 zeiger->groupcipher = tags.groupcipher;
 zeiger->cipher = tags.cipher;
@@ -5335,7 +5435,7 @@ if(fd_pcapng > 0)
 	if((pcapngframesout &PCAPNG_FRAME_MANAGEMENT) == PCAPNG_FRAME_MANAGEMENT) writeepb(fd_pcapng);
 	}
 if(fh_nmea != NULL) writegpwpl(macfrx->addr2);
-if(channelscanlist[cpa] == zeiger->channel)
+if(ptrfscanlist->channel == zeiger->channel)
 	{
 	if((tags.essidlen != 0) && (tags.essid[0] != 0))
 		{
@@ -5365,9 +5465,8 @@ static struct iwreq pwrq;
 static char timestring[16];
 
 memset(&pwrq, 0, sizeof(pwrq));
-strncpy(pwrq.ifr_name, interfacename, IFNAMSIZ -1);
+memcpy(&pwrq.ifr_name, interfacename, IFNAMSIZ);
 pwrq.u.freq.flags = IW_FREQ_FIXED;
-pwrq.u.freq.e = 0;
 if(ioctl(fd_socket, SIOCGIWFREQ, &pwrq) < 0) return;
 if(aktchannel != pwrq.u.freq.m)
 	{
@@ -5375,7 +5474,7 @@ if(aktchannel != pwrq.u.freq.m)
 	strftime(timestring, 16, "%H:%M:%S", localtime(&tv.tv_sec));
 	snprintf(servermsg, SERVERMSG_MAX, "%s     ERROR: %d [INTERFACE IS NOT ON EXPECTED CHANNEL, EXPECTED: %d, DETECTED: %d]\n", timestring, errorcount, aktchannel, pwrq.u.freq.m);
 	if(((statusout &STATUS_SERVER) == STATUS_SERVER) && (fd_socket_mcsrv > 0)) serversendstatus(servermsg, strlen(servermsg));
-	else printf("%s", servermsg);
+	else fprintf(stdout, "%s", servermsg);
 	}
 return;
 }
@@ -5385,12 +5484,39 @@ static inline bool set_channel()
 static struct iwreq pwrq;
 
 memset(&pwrq, 0, sizeof(pwrq));
-strncpy(pwrq.ifr_name, interfacename, IFNAMSIZ -1);
+memcpy(&pwrq.ifr_name, interfacename, IFNAMSIZ);
 pwrq.u.freq.flags = IW_FREQ_FIXED;
-pwrq.u.freq.m = channelscanlist[cpa];
-pwrq.u.freq.e = 0;
+pwrq.u.freq.m = ptrfscanlist->frequency;
+pwrq.u.freq.e = 6;
 if(ioctl(fd_socket, SIOCSIWFREQ, &pwrq) < 0) return false;
 if(ioctl(fd_socket, SIOCGIWFREQ, &pwrq) == 0) aktchannel = pwrq.u.freq.m;
+return true;
+}
+/*===========================================================================*/
+static inline bool set_channel_test(int freq)
+{
+static struct iwreq pwrq;
+
+memset(&pwrq, 0, sizeof(pwrq));
+memcpy(&pwrq.ifr_name, interfacename, IFNAMSIZ);
+pwrq.u.freq.flags = IW_FREQ_FIXED;
+pwrq.u.freq.m = freq;
+pwrq.u.freq.e = 6;
+if(ioctl(fd_socket, SIOCSIWFREQ, &pwrq) < 0)
+	{
+	fprintf(stderr, "driver doesn't support ioctl() SIOCSIWFREQ\n");
+	return false;
+	}
+if(ioctl(fd_socket, SIOCGIWFREQ, &pwrq) < 0)
+	{
+	fprintf(stderr, "driver doesn't support ioctl() SIOCGIWFREQ\n");
+	return false;
+	}
+if((pwrq.u.freq.m == freq) && (pwrq.u.freq.e == 6)) return true;
+fprintf(stderr, "driver use unsupported frequency format\n"
+		"expected frequency: %d - reported frequency: %d\n"
+		"expected exponent;  6    - reported exponent:  %d\n",
+		freq, pwrq.u.freq.m, pwrq.u.freq.e);
 return true;
 }
 /*===========================================================================*/
@@ -5473,7 +5599,6 @@ if((rthp & IEEE80211_RADIOTAP_EXT) == IEEE80211_RADIOTAP_EXT)
 		if((le32toh(pp[i]) & IEEE80211_RADIOTAP_EXT) != IEEE80211_RADIOTAP_EXT) break;
 		}
 	}
-if((pf %8) != 0) pf +=4;
 if((rthp & IEEE80211_RADIOTAP_TSFT) == IEEE80211_RADIOTAP_TSFT) pf += 8;
 pfc = 0;
 if((rthp & IEEE80211_RADIOTAP_FLAGS) == IEEE80211_RADIOTAP_FLAGS)
@@ -5482,9 +5607,17 @@ if((rthp & IEEE80211_RADIOTAP_FLAGS) == IEEE80211_RADIOTAP_FLAGS)
 	pf +=1;
 	}
 if((rthp & IEEE80211_RADIOTAP_RATE) == IEEE80211_RADIOTAP_RATE) pf += 1;
-if((rthp & IEEE80211_RADIOTAP_CHANNEL) == IEEE80211_RADIOTAP_CHANNEL) pf += 4;
-if((rthp & IEEE80211_RADIOTAP_FHSS) == IEEE80211_RADIOTAP_FHSS) pf += 2;
-if((rthp &  IEEE80211_RADIOTAP_DBM_ANTSIGNAL) ==  IEEE80211_RADIOTAP_DBM_ANTSIGNAL)
+if((rthp & IEEE80211_RADIOTAP_CHANNEL) == IEEE80211_RADIOTAP_CHANNEL)
+	{
+	if((pf %2) != 0) pf += 1; 
+	pf += 4;
+	}
+if((rthp & IEEE80211_RADIOTAP_FHSS) == IEEE80211_RADIOTAP_FHSS)
+	{
+	if((pf %2) != 0) pf += 1; 
+	pf += 2;
+	}
+if((rthp & IEEE80211_RADIOTAP_DBM_ANTSIGNAL) == IEEE80211_RADIOTAP_DBM_ANTSIGNAL)
 	{
 	if(pf > rthlen) return pfc;
 	rssi = packetptr[pf];
@@ -5694,7 +5827,8 @@ snprintf(servermsg, SERVERMSG_MAX, "\e[?25l\nstart capturing (stop with ctrl+c)\
 	"REPLAYCOUNT...............: %" PRIu64 "\n"
 	"ANONCE....................: %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n"
 	"SNONCE....................: %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n"
-	"\n",
+	"\n"
+	"TIME     FREQ/CH  MAC_DEST     MAC_SOURCE   ESSID [FRAME TYPE]\n",
 	nmeasentence, interfacename, interfaceprotocol, interfacetxpwr,
 	mac_orig[0], mac_orig[1], mac_orig[2], mac_orig[3], mac_orig[4], mac_orig[5],
 	mac_virt[0], mac_virt[1], mac_virt[2], mac_virt[3], mac_virt[4], mac_virt[5],
@@ -5716,11 +5850,11 @@ snprintf(servermsg, SERVERMSG_MAX, "\e[?25l\nstart capturing (stop with ctrl+c)\
 	mysnonce[24], mysnonce[25], mysnonce[26], mysnonce[27], mysnonce[28], mysnonce[29], mysnonce[30], mysnonce[31]);
 
 if(((statusout &STATUS_SERVER) == STATUS_SERVER) && (fd_socket_mcsrv > 0)) serversendstatus(servermsg, strlen(servermsg));
-else printf("%s", servermsg);
+else fprintf(stdout, "%s", servermsg);
 gettimeofday(&tv, NULL);
 tsfd.tv_sec = 0;
 tsfd.tv_nsec = FDNSECTIMERB;
-cpa = 0;
+ptrfscanlist = fscanlist; 
 if(set_channel() == false) errorcount++;
 if(beaconactiveflag == true)
 	{
@@ -5733,7 +5867,7 @@ while(wantstopflag == false)
 	if(errorcount >= maxerrorcount)
 		{
 		fprintf(stderr, "\nmaximum number of errors is reached\n");
-		globalclose();
+		if(forceinterfaceflag == false) globalclose();
 		}
 	if(gpiobutton > 0)
 		{
@@ -5749,14 +5883,14 @@ while(wantstopflag == false)
 			totflag = true;
 			globalclose();
 			}
-		if((tv.tv_sec %5) == 0)
+		if((tv.tv_sec %gpiostatusledflashinterval) == 0)
 			{
 			if(gpiostatusled > 0)
 				{
 				GPIO_SET = 1 << gpiostatusled;
 				nanosleep(&sleepled, NULL);
 				GPIO_CLR = 1 << gpiostatusled;
-				if((tv.tv_sec - tvlast_sec) > WATCHDOG)
+				if((tv.tv_sec -tvlast_sec) > WATCHDOG)
 					{
 					nanosleep(&sleepled, NULL);
 					GPIO_SET = 1 << gpiostatusled;
@@ -5768,8 +5902,8 @@ while(wantstopflag == false)
 			}
 		if((tv.tv_sec %staytime) == 0)
 			{
-			cpa++;
-			if(channelscanlist[cpa] == 0) cpa = 0;
+			ptrfscanlist++;
+			if(ptrfscanlist->frequency == 0) ptrfscanlist = fscanlist;
 			if(set_channel() == false)
 				{
 				errorcount++;
@@ -5833,9 +5967,9 @@ if(rcaorder == RCA_SORT_BY_HIT) qsort(scanlist, scanlistmax, SCANLIST_SIZE, sort
 else if(rcaorder == RCA_SORT_BY_COUNT) qsort(scanlist, scanlistmax, SCANLIST_SIZE, sort_scanlist_by_beacon);
 else if(rcaorder == RCA_SORT_BY_CHANNEL) qsort(scanlist, scanlistmax, SCANLIST_SIZE, sort_scanlist_by_channel);
 strftime(timestring, 16, "%H:%M:%S", localtime(&tv.tv_sec));
-printf("\033[2J\033[0;0H BSSID         CH  RSSI BEACON RESPONSE ESSID  SCAN-CH: %3d INJECTION-RATIO: %3d%% [%s]\n"
-	"---------------------------------------------------------------------------------------------\n",
-	channelscanlist[cpa], injectionratio, timestring);
+fprintf(stdout, "\033[2J\033[0;0H BSSID        FREQ   CH RSSI BEACON RESPONSE ESSID  SCAN-FREQ: %4d INJECTION-RATIO: %3d%% [%s]\n"
+	"-----------------------------------------------------------------------------------------------------\n",
+	ptrfscanlist->frequency, injectionratio, timestring);
 for(zeiger = scanlist; zeiger < scanlist +scanlistmax; zeiger++)
 	{
 	if(zeiger->count == 0) return;
@@ -5846,9 +5980,9 @@ for(zeiger = scanlist; zeiger < scanlist +scanlistmax; zeiger++)
 		injectionratio = (injectionhit *100) /injectioncount;
 		if(injectionratio > 100) injectionratio = 100;
 		}
-	if(zeiger->channel != 0) printf(" %02x%02x%02x%02x%02x%02x %3d  %4d %6d   %6d %s\n",
+	if(zeiger->channel != 0) fprintf(stdout, " %02x%02x%02x%02x%02x%02x %4d  %3d %4d %6d   %6d %s\n",
 					zeiger->ap[0], zeiger->ap[1], zeiger->ap[2], zeiger->ap[3], zeiger->ap[4], zeiger->ap[5],
-					zeiger->channel,  zeiger->rssi, zeiger->beacon, zeiger->hit, zeiger->essid);
+					zeiger->frequency, zeiger->channel, zeiger->rssi, zeiger->beacon, zeiger->hit, zeiger->essid);
 	}
 return;
 }
@@ -5872,19 +6006,41 @@ for(zeiger = scanlist; zeiger < scanlist +SCANLIST_MAX -1; zeiger++)
 	if(zeiger->count == 0) break;
 	if(memcmp(zeiger->ap, macfrx->addr2, 6) != 0) continue;
 	gettags(apinfolen, apinfoptr, &tags);
-	if(tags.channel == channelscanlist[cpa]) zeiger->channel = tags.channel;
+	if(tags.channel == ptrfscanlist->channel) 
+		{
+		zeiger->frequency = ptrfscanlist->frequency;
+		zeiger->channel = tags.channel;
+		}
+	else if(tags.channel == 0)
+		{
+		zeiger->frequency = ptrfscanlist->frequency;
+		zeiger->channel = ptrfscanlist->channel;
+		}
 	zeiger->timestamp = timestamp;
 	zeiger->count +=1;
 	zeiger->proberesponse +=1;
 	zeiger->rssi = rssi;
 	zeiger->essidlen = tags.essidlen;
 	memcpy(zeiger->essid, tags.essid, ESSID_LEN_MAX);
-	if(memcmp(macfrx->addr1, &mac_myclient, 6) == 0) zeiger->hit += 1;
+	if(memcmp(macfrx->addr1, &mac_myclient, 6) == 0)
+		{
+		zeiger->hit += 1;
+		responsehit++;
+		}
 	return;
 	}
 memset(zeiger, 0, SCANLIST_SIZE);
 gettags(apinfolen, apinfoptr, &tags);
-if(tags.channel == channelscanlist[cpa]) zeiger->channel = tags.channel;
+if(tags.channel == ptrfscanlist->channel)
+	{
+	zeiger->frequency = ptrfscanlist->frequency;
+	zeiger->channel = tags.channel;
+	}
+else if(tags.channel == 0)
+		{
+		zeiger->frequency = ptrfscanlist->frequency;
+		zeiger->channel = ptrfscanlist->channel;
+		}
 zeiger->timestamp = timestamp;
 zeiger->count = 1;
 zeiger->proberesponse =1;
@@ -5892,7 +6048,11 @@ zeiger->rssi = rssi;
 memcpy(zeiger->ap, macfrx->addr2, 6);
 zeiger->essidlen = tags.essidlen;
 memcpy(zeiger->essid, tags.essid, ESSID_LEN_MAX);
-if(memcmp(macfrx->addr1, &mac_myclient, 6) == 0) zeiger->hit += 1;
+if(memcmp(macfrx->addr1, &mac_myclient, 6) == 0)
+	{
+	zeiger->hit += 1;
+	responsehit++;
+	}
 qsort(scanlist, zeiger -scanlist, SCANLIST_SIZE, sort_scanlist_by_hit);
 return;
 }
@@ -5916,7 +6076,16 @@ for(zeiger = scanlist; zeiger < scanlist +SCANLIST_MAX -1; zeiger++)
 	if(zeiger->count == 0) break;
 	if(memcmp(zeiger->ap, macfrx->addr2, 6) != 0) continue;
 	gettags(apinfolen, apinfoptr, &tags);
-	if(tags.channel == channelscanlist[cpa]) zeiger->channel = tags.channel;
+	if(tags.channel == ptrfscanlist->channel)
+		{
+		zeiger->frequency = ptrfscanlist->frequency;
+		zeiger->channel = tags.channel;
+		}
+	else if(tags.channel == 0)
+		{
+		zeiger->frequency = ptrfscanlist->frequency;
+		zeiger->channel = ptrfscanlist->channel;
+		}
 	zeiger->timestamp = timestamp;
 	zeiger->count += 1;
 	zeiger->beacon += 1;
@@ -5933,7 +6102,16 @@ for(zeiger = scanlist; zeiger < scanlist +SCANLIST_MAX -1; zeiger++)
 	}
 memset(zeiger, 0, SCANLIST_SIZE);
 gettags(apinfolen, apinfoptr, &tags);
-if(tags.channel == channelscanlist[cpa]) zeiger->channel = tags.channel;
+if(tags.channel == ptrfscanlist->channel)
+	{
+	zeiger->frequency = ptrfscanlist->frequency;
+	zeiger->channel = tags.channel;
+	}
+else if(tags.channel == 0)
+	{
+	zeiger->frequency = ptrfscanlist->frequency;
+	zeiger->channel = ptrfscanlist->channel;
+	}
 zeiger->timestamp = timestamp;
 zeiger->count = 1;
 zeiger->beacon = 1;
@@ -6051,7 +6229,6 @@ tvold.tv_sec = tv.tv_sec;
 tvold.tv_usec = tv.tv_usec;
 tsfd.tv_sec = 0;
 tsfd.tv_nsec = FDNSECTIMER;
-cpa = 0;
 if(set_channel() == false) errorcount++;
 if((attackstatus &DISABLE_AP_ATTACKS) != DISABLE_AP_ATTACKS) send_proberequest_undirected_broadcast();
 printrcascan();
@@ -6060,7 +6237,7 @@ while(wantstopflag == false)
 	if(errorcount >= maxerrorcount)
 		{
 		fprintf(stderr, "\nmaximum number of errors is reached\n");
-		globalclose();
+		if(forceinterfaceflag == false) globalclose();
 		}
 	if(gpiobutton > 0)
 		{
@@ -6070,8 +6247,8 @@ while(wantstopflag == false)
 	if(tv.tv_sec != tvold.tv_sec)
 		{
 		get_channel();
-		cpa++;
-		if(channelscanlist[cpa] == 0) cpa = 0;
+		ptrfscanlist++;
+		if(ptrfscanlist->frequency == 0) ptrfscanlist = fscanlist;
 		if(set_channel() == false)
 			{
 			errorcount++;
@@ -6083,7 +6260,7 @@ while(wantstopflag == false)
 			totflag = true;
 			globalclose();
 			}
-		if((tv.tv_sec %5) == 0)
+		if((tv.tv_sec %gpiostatusledflashinterval) == 0)
 			{
 			if(gpiostatusled > 0)
 				{
@@ -6121,8 +6298,8 @@ while(wantstopflag == false)
 	else if(FD_ISSET(fd_socket, &readfds)) process_packet_rca();
 	else
 		{
-		cpa++;
-		if(channelscanlist[cpa] == 0) cpa = 0;
+		ptrfscanlist++;
+		if(ptrfscanlist->frequency == 0) ptrfscanlist = fscanlist;
 		if(set_channel() == false)
 			{
 			errorcount++;
@@ -6148,7 +6325,7 @@ static bool inject6 = false;
 static int networkcount = 0;
 static int networkhit = 0;
 static int networkratio = 0;
-static int stagecount = 2;
+static int stagecount = 1;
 
 gettimeofday(&tv, NULL);
 tvold.tv_sec = tv.tv_sec;
@@ -6158,24 +6335,17 @@ tsfd.tv_nsec = FDNSECTIMER;
 if((attackstatus &DISABLE_AP_ATTACKS) != DISABLE_AP_ATTACKS) send_proberequest_undirected_broadcast();
 attackstatus = 0;
 fprintf(stdout, "starting antenna test and packet injection test (that can take up to two minutes)...\n");
-cpa = 0;
-fprintf(stdout, "available channels: ");
-while(channelscanlist[cpa] != 0)
-	{
-	if(channelscanlist[cpa +1] != 0) fprintf(stdout, "%d,", channelscanlist[cpa]);
-	else fprintf(stdout, "%d\n", channelscanlist[cpa]);
-	cpa++;
-	}
-cpa = 0;
+ptrfscanlist = fscanlist;
 if(set_channel() == false) errorcount++;
 while(tvold.tv_sec == tv.tv_sec) gettimeofday(&tv, NULL);
 tvold.tv_sec = tv.tv_sec;
+fprintf(stdout, "\e[?25lstage %d of 2 probing frequency %d/%d proberesponse %d", stagecount, ptrfscanlist->frequency, ptrfscanlist->channel, responsehit);
 while(wantstopflag == false)
 	{
 	if(errorcount >= maxerrorcount)
 		{
 		fprintf(stderr, "\nmaximum number of errors is reached\n");
-		globalclose();
+		if(forceinterfaceflag == false) globalclose();
 		}
 	if(gpiobutton > 0)
 		{
@@ -6185,19 +6355,15 @@ while(wantstopflag == false)
 	if(tv.tv_sec != tvold.tv_sec)
 		{
 		get_channel();
-		cpa++;
-		if(channelscanlist[cpa] == 0) stagecount--;
-		if(stagecount == 0) break;
-		if(set_channel() == false) continue;
 		tvold.tv_sec = tv.tv_sec;
-		if((tv.tv_sec %5) == 0)
+		if((tv.tv_sec %gpiostatusledflashinterval) == 0)
 			{
 			if(gpiostatusled > 0)
 				{
 				GPIO_SET = 1 << gpiostatusled;
 				nanosleep(&sleepled, NULL);
 				GPIO_CLR = 1 << gpiostatusled;
-				if((tv.tv_sec - tvlast_sec) > WATCHDOG)
+				if((tv.tv_sec -tvlast_sec) > WATCHDOG)
 					{
 					nanosleep(&sleepled, NULL);
 					GPIO_SET = 1 << gpiostatusled;
@@ -6205,6 +6371,18 @@ while(wantstopflag == false)
 					GPIO_CLR = 1 << gpiostatusled;
 					}
 				}
+			}
+		if((tv.tv_sec %2) == 0)
+			{
+			ptrfscanlist++;
+			if(ptrfscanlist->frequency == 0)
+				{
+				ptrfscanlist = fscanlist;
+				stagecount++;
+				}
+			if(stagecount >= 3) break;
+			if(set_channel() == false) continue;
+			fprintf(stdout, "\rstage %d of 2 probing frequency %d/%d proberesponse %d   ", stagecount, ptrfscanlist->frequency, ptrfscanlist->channel, responsehit);
 			}
 		if((attackstatus &DISABLE_AP_ATTACKS) != DISABLE_AP_ATTACKS) send_proberequest_undirected_broadcast();
 		}
@@ -6224,58 +6402,54 @@ while(wantstopflag == false)
 		}
 	if(FD_ISSET(fd_gps, &readfds)) process_gps();
 	else if(FD_ISSET(fd_socket, &readfds)) process_packet_rca();
-	else
-		{
-		cpa++;
-		if(channelscanlist[cpa] == 0) stagecount--;
-		if(stagecount == 0) break;
-		if(set_channel() == false) continue;
-		if((attackstatus &DISABLE_AP_ATTACKS) != DISABLE_AP_ATTACKS) send_proberequest_undirected_broadcast();
-		}
 	}
 qsort(scanlist, scanlistmax, SCANLIST_SIZE, sort_scanlist_by_hit);
+fprintf(stdout, "\e[?25h\n");
 for(zeiger = scanlist; zeiger < scanlist +SCANLIST_MAX; zeiger++)
 	{
 	if(zeiger->count == 0) break;
-	if((zeiger->channel < 36) && (zeiger->hit > 0)) inject24 = true; 
-	if((zeiger->channel >= 36) && (zeiger->channel < 200) && (zeiger->hit > 0)) inject5 = true; 
-	if((zeiger->channel >= 200)  && (zeiger->hit > 0)) inject6 = true; 
-	injectionhit += zeiger->hit;
+	if(zeiger->hit > 0)
+		{
+		if(zeiger->channel < 36) inject24 = true; 
+		else if((zeiger->channel >= 36) && (zeiger->channel < 200)) inject5 = true; 
+		else if(zeiger->channel >= 200) inject6 = true; 
+		injectionhit += zeiger->hit;
+		networkhit++;
+		}
 	injectioncount += zeiger->beacon;
 	networkcount++;
-	if(zeiger->hit > 0) networkhit ++;
 	}
 if(injectionhit > 0)
 	{
 	if((injectionhit > 0) && (injectioncount > 0)) injectionratio = (injectionhit *100) /injectioncount;
 	if(injectionratio > 100) injectionratio = 100;
-	if(inject24 == true) printf("packet injection is working on 2.4GHz!\n");
-	if(inject5 == true) printf("packet injection is working on 5GHz!\n");
-	if(inject6 == true) printf("packet injection is working on 6GHz!\n");
-	printf("injection ratio: %d%% (BEACON: %d PROBERESPONSE: %d)\n", injectionratio, injectioncount, injectionhit);
-	if(injectionratio < 25) printf("your injection ratio is poor - improve your equipment and/or get closer to the target\n");
-	else if((injectionratio >= 25) && (injectionratio < 50)) printf("your injection ratio is average, but there is still room for improvement\n");
-	else if((injectionratio >= 50) && (injectionratio < 75)) printf("your injection ratio is good\n");
-	else if((injectionratio >= 75) && (injectionratio < 90)) printf("your injection ratio is excellent, let's ride!\n");
-	else if(injectionratio > 90) printf("your injection ratio is huge - say kids what time is it?\n");
+	if(inject24 == true) fprintf(stdout, "packet injection is working on 2.4GHz!\n");
+	if(inject5 == true) fprintf(stdout, "packet injection is working on 5GHz!\n");
+	if(inject6 == true) fprintf(stdout, "packet injection is working on 6GHz!\n");
+	fprintf(stdout, "injection ratio: %d%% (BEACON: %d PROBERESPONSE: %d)\n", injectionratio, injectioncount, injectionhit);
+	if(injectionratio < 25) fprintf(stdout, "your injection ratio is poor - improve your equipment and/or get closer to the target\n");
+	else if((injectionratio >= 25) && (injectionratio < 50)) fprintf(stdout, "your injection ratio is average, but there is still room for improvement\n");
+	else if((injectionratio >= 50) && (injectionratio < 75)) fprintf(stdout, "your injection ratio is good\n");
+	else if((injectionratio >= 75) && (injectionratio < 90)) fprintf(stdout, "your injection ratio is excellent, let's ride!\n");
+	else if(injectionratio > 90) fprintf(stdout, "your injection ratio is huge - say kids what time is it?\n");
 	if((networkhit > 0) && (networkcount > 0)) networkratio = (networkhit *100) /networkcount;
 	if(networkratio > 100) networkratio = 100;
-	printf("antenna ratio: %d%% (NETWORK: %d PROBERESPONSE: %d)\n", networkratio, networkcount, networkhit);
-	if(networkratio < 25) printf("your incection ratio is poor - improve your antenna and get closer to the target\n");
-	else if((networkratio >= 25) && (networkratio < 50)) printf("your antenna ratio is average, but there is still room for improvement\n");
-	else if((networkratio >= 50) && (networkratio < 75)) printf("your antenna ratio is good\n");
-	else if((networkratio >= 75) && (networkratio < 90)) printf("your antenna ratio is excellent, let's ride!\n");
-	else if(networkratio > 90) printf("your antenna ratio is huge - say kids what time is it?\n");
+	fprintf(stdout, "antenna ratio: %d%% (NETWORK: %d PROBERESPONSE: %d)\n", networkratio, networkcount, networkhit);
+	if(networkratio < 25) fprintf(stdout, "your incection ratio is poor - improve your antenna and get closer to the target\n");
+	else if((networkratio >= 25) && (networkratio < 50)) fprintf(stdout, "your antenna ratio is average, but there is still room for improvement\n");
+	else if((networkratio >= 50) && (networkratio < 75)) fprintf(stdout, "your antenna ratio is good\n");
+	else if((networkratio >= 75) && (networkratio < 90)) fprintf(stdout, "your antenna ratio is excellent, let's ride!\n");
+	else if(networkratio > 90) fprintf(stdout, "your antenna ratio is huge - say kids what time is it?\n");
 	}
-else printf("warning: no PROBERESPONSE received - packet injection is probably not working!\n");
+else fprintf(stdout, "warning: no PROBERESPONSE received - packet injection is probably not working!\n");
 errorcount -= radiotaperrorcount;
 errorcount -= gpserrorcount;
-if(errorcount == 1) printf("%d driver error encountered during the test\n", errorcount);
-if(errorcount > 1) printf("%d driver errors encountered during the test\n", errorcount);
-if(radiotaperrorcount == 1) printf("%d radiotap error encountered during the test\n", radiotaperrorcount);
-if(radiotaperrorcount > 1) printf("%d radiotap errors encountered during the test\n", radiotaperrorcount);
-if(gpserrorcount == 1) printf("%d GPS error encountered during the test\n", gpserrorcount);
-if(gpserrorcount > 1) printf("%d GPS errors encountered during the test\n", gpserrorcount);
+if(errorcount == 1) fprintf(stdout, "%d driver error encountered during the test\n", errorcount);
+if(errorcount > 1) fprintf(stdout, "%d driver errors encountered during the test\n", errorcount);
+if(radiotaperrorcount == 1) fprintf(stdout, "%d radiotap error encountered during the test\n", radiotaperrorcount);
+if(radiotaperrorcount > 1) fprintf(stdout, "%d radiotap errors encountered during the test\n", radiotaperrorcount);
+if(gpserrorcount == 1) fprintf(stdout, "%d GPS error encountered during the test\n", gpserrorcount);
+if(gpserrorcount > 1) fprintf(stdout, "%d GPS errors encountered during the test\n", gpserrorcount);
 globalclose();
 return;
 }
@@ -6299,7 +6473,7 @@ static struct sockaddr_in sockaddrFrom;
 static socklen_t sockaddrFrom_len = sizeof(sockaddrFrom);
 static int written;
 
-printf("waiting for hcxdumptool server...\n");
+fprintf(stdout, "waiting for hcxdumptool server...\n");
 gettimeofday(&tv, NULL);
 timestampstart = ((uint64_t)tv.tv_sec *1000000) +tv.tv_usec;
 timestamp = timestampstart;
@@ -6345,7 +6519,7 @@ while(1)
 			{
 			case SERVERMSG_TYPE_STATUS:
 				serverstatus[msglen] = 0;
-				printf("%s", &serverstatus[SERVERMSG_HEAD_SIZE]);
+				fprintf(stdout, "%s", &serverstatus[SERVERMSG_HEAD_SIZE]);
 				if((pcapngoutname != NULL) && (havepcapngheader == false) && (pcapngoutname != NULL))
 					{
 					clientrequestpcapnghead((struct sockaddr*)&sockaddrFrom, sockaddrFrom_len);
@@ -6641,7 +6815,7 @@ memset(&nmeasentence, 0, NMEA_MAX);
 memcpy(&nmeasentence, nogps, 3);
 if(gpsname != NULL)
 	{
-	printf("connecting GPS device...\n");
+	fprintf(stdout, "connecting GPS device...\n");
 	if((fd_gps = open(gpsname, O_RDONLY)) < 0)
 		{
 		perror( "failed to open GPS device");
@@ -6658,7 +6832,7 @@ if(gpsdflag == true)
 		fd_gps = 0;
 		return;
 		}
-	printf("connecting GPSD...\n");
+	fprintf(stdout, "connecting GPSD...\n");
 	memset(&gpsd_addr, 0, sizeof(struct sockaddr_in));
 	gpsd_addr.sin_family = AF_INET;
 	gpsd_addr.sin_port = htons(2947);
@@ -6731,121 +6905,115 @@ memset(&drivername, 0, 34);
 memset(&driverversion, 0, 34);
 memset(&driverfwversion, 0, 34);
 checkallunwanted();
+if(forceinterfaceflag == true)fprintf(stderr, "warning: ioctl() warnings are ignored -  if monitor mode, packet injection or channel switch is not working as expected\n");
 if(checkmonitorinterface(interfacename) == true) fprintf(stderr, "warning: %s is probably a virtual monitor interface and some attack modes may not work as expected\n", interfacename);
 if((fd_socket = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
 	{
 	perror("socket failed");
 	return false;
 	}
-memset(interfaceprotocol, 0, IFNAMSIZ);
+memset(interfaceprotocol, 0, IFNAMSIZ +1);
 memset(&iwr, 0, sizeof(iwr));
-strncpy(iwr.ifr_name, interfacename, IFNAMSIZ -1);
+memcpy(&iwr.ifr_name, interfacename, IFNAMSIZ);
 if(ioctl(fd_socket, SIOCGIWNAME, &iwr) < 0)
 	{
 	perror("failed to detect wlan interface");
-	return false;
+	if(forceinterfaceflag == false) return false;
 	}
-strncpy(interfaceprotocol, iwr.u.name, IFNAMSIZ);
+memcpy(&interfaceprotocol, iwr.u.name, IFNAMSIZ);
 if(bpf.len > 0)
 	{
 	if(setsockopt(fd_socket, SOL_SOCKET, SO_ATTACH_FILTER, &bpf, sizeof(bpf)) < 0) perror("failed to set Berkeley Packet Filter");
 	}
 memset(&ifr_old, 0, sizeof(ifr));
-strncpy(ifr_old.ifr_name, interfacename, IFNAMSIZ -1);
+memcpy(&ifr_old.ifr_name, interfacename, IFNAMSIZ);
 if(ioctl(fd_socket, SIOCGIFFLAGS, &ifr_old) < 0)
 	{
 	perror("failed to backup current interface flags, ioctl(SIOCGIFFLAGS) not supported by driver");
-	return false;
+	if(forceinterfaceflag == false) return false;
 	}
 memset(&iwr_old, 0, sizeof(iwr));
-strncpy(iwr_old.ifr_name, interfacename, IFNAMSIZ -1);
+memcpy(&iwr_old.ifr_name, interfacename, IFNAMSIZ);
 if(ioctl(fd_socket, SIOCGIWMODE, &iwr_old) < 0)
 	{
 	perror("failed to backup  current interface mode, ioctl(SIOCGIWMODE) not supported by driver");
-	return false;
+	if(forceinterfaceflag == false) return false;
 	}
 if((iwr_old.u.mode & IW_MODE_MONITOR) != IW_MODE_MONITOR)
 	{
 	memset(&ifr, 0, sizeof(ifr));
-	strncpy(ifr.ifr_name, interfacename, IFNAMSIZ -1);
+	memcpy(&ifr.ifr_name, interfacename, IFNAMSIZ);
 	if(ioctl(fd_socket, SIOCGIFFLAGS, &ifr) < 0)
 		{
 		perror("failed to get current interface flags, ioctl(SIOCGIFFLAGS) not supported by driver");
-		return false;
+		if(forceinterfaceflag == false) return false;
 		}
 	ifr.ifr_flags = 0;
 	if(ioctl(fd_socket, SIOCSIFFLAGS, &ifr) < 0)
 		{
 		perror("failed to set interface down, ioctl(SIOCSIFFLAGS) not supported by driver");
-		return false;
+		if(forceinterfaceflag == false) return false;
 		}
 	memset(&iwr, 0, sizeof(iwr));
-	strncpy(iwr.ifr_name, interfacename, IFNAMSIZ -1);
+	memcpy(&iwr.ifr_name, interfacename, IFNAMSIZ);
 	if(ioctl(fd_socket, SIOCGIWMODE, &iwr) < 0)
 		{
 		perror("failed to get interface information, ioctl(SIOCGIWMODE) not supported by driver");
-		return false;
+		if(forceinterfaceflag == false) return false;
 		}
 	iwr.u.mode = IW_MODE_MONITOR;
 	if(ioctl(fd_socket, SIOCSIWMODE, &iwr) < 0)
 		{
 		perror("failed to set monitor mode, ioctl(SIOCSIWMODE) not supported by driver");
-		return false;
+		if(forceinterfaceflag == false) return false;
 		}
 	memset(&iwr, 0, sizeof(iwr));
-	strncpy(iwr.ifr_name, interfacename, IFNAMSIZ -1);
+	memcpy(&iwr.ifr_name, interfacename, IFNAMSIZ);
 	if(ioctl(fd_socket, SIOCGIWMODE, &iwr) < 0)
 		{
 		perror("failed to get interface information, ioctl(SIOCGIWMODE) not supported by driver");
-		return false;
+		if(forceinterfaceflag == false) return false;
 		}
 	if((iwr.u.mode & IW_MODE_MONITOR) != IW_MODE_MONITOR)
 		{
-		fprintf(stderr, "warning: interface is not in monitor mode\n");
-		return false;
+		fprintf(stderr, "warning: physical interface is not in monitor mode\n");
+		if(forceinterfaceflag == false) return false;
 		}
 	ifr.ifr_flags = IFF_UP | IFF_BROADCAST | IFF_RUNNING;
 	if(ioctl(fd_socket, SIOCSIFFLAGS, &ifr) < 0)
 		{
 		perror("failed to set interface up, ioctl(SIOCSIFFLAGS) not supported by driver");
-		return false;
+		if(forceinterfaceflag == false) return false;
 		}
 	memset(&ifr, 0, sizeof(ifr));
-	strncpy(ifr.ifr_name, interfacename, IFNAMSIZ -1);
+	memcpy(&ifr.ifr_name, interfacename, IFNAMSIZ);
 	if(ioctl(fd_socket, SIOCGIFFLAGS, &ifr) < 0)
 		{
 		perror("failed to get interface flags, ioctl(SIOCGIFFLAGS) not supported by driver");
-		return false;
+		if(forceinterfaceflag == false) return false;
 		}
 	if((ifr.ifr_flags & (IFF_UP)) != (IFF_UP))
 		{
 		fprintf(stderr, "warning: interface is not up\n");
-		return false;
+		if(forceinterfaceflag == false) return false;
 		}
 	}
 else
 	{
 	fprintf(stderr, "interface is already in monitor mode, skipping ioctl(SIOCSIWMODE) and ioctl(SIOCSIFFLAGS) system calls\n");
 	memset(&ifr, 0, sizeof(ifr));
-	strncpy(ifr.ifr_name, interfacename, IFNAMSIZ -1);
-	if(ioctl(fd_socket, SIOCGIFFLAGS, &ifr) < 0)
-		{
-		perror("failed to get interface flags, ioctl(SIOCGIFFLAGS) not supported by driver");
-		}
-	if((ifr.ifr_flags & (IFF_UP)) != (IFF_UP))
-		{
-		fprintf(stderr, "warning: interface is not up\n");
-		}
+	memcpy(&ifr.ifr_name, interfacename, IFNAMSIZ);
+	if(ioctl(fd_socket, SIOCGIFFLAGS, &ifr) < 0) perror("failed to get interface flags, ioctl(SIOCGIFFLAGS) not supported by driver");
+	if((ifr.ifr_flags & (IFF_UP)) != (IFF_UP)) fprintf(stderr, "warning: interface is not up\n");
 	}
 /* disable power management, if possible */
 memset(&iwr, 0, sizeof(iwr));
-strncpy(iwr.ifr_name, interfacename, IFNAMSIZ -1);
-memset(&param,0 , sizeof(param));
-iwr.u.data.pointer = &param;
+memcpy(&iwr.ifr_name, interfacename, IFNAMSIZ);
+iwr.u.power.disabled = 1;
 ioctl(fd_socket, SIOCSIWPOWER, &iwr);
 
 memset(&iwr, 0, sizeof(iwr));
-strncpy(iwr.ifr_name, interfacename, IFNAMSIZ -1);
+memcpy(&iwr.ifr_name, interfacename, IFNAMSIZ);
 ioctl(fd_socket, SIOCGIWTXPOW, &iwr);
 memcpy(&txpower, &(iwr.u.txpower), sizeof(param));
 interfacetxpwr = 0;
@@ -6873,7 +7041,7 @@ else
 	}
 
 memset(&ifr, 0, sizeof(ifr));
-strncpy(ifr.ifr_name, interfacename, IFNAMSIZ -1);
+memcpy(&ifr.ifr_name, interfacename, IFNAMSIZ);
 ifr.ifr_flags = 0;
 if(ioctl(fd_socket, SIOCGIFINDEX, &ifr) < 0)
 	{
@@ -6906,7 +7074,7 @@ if(!epmaddr)
 	return false;
 	}
 memset(&ifr, 0, sizeof(ifr));
-strncpy(ifr.ifr_name, interfacename, IFNAMSIZ -1);
+memcpy(&ifr.ifr_name, interfacename, IFNAMSIZ);
 epmaddr->cmd = ETHTOOL_GPERMADDR;
 epmaddr->size = 6;
 ifr.ifr_data = (char*)epmaddr;
@@ -6924,11 +7092,11 @@ memcpy(&mac_orig, epmaddr->data, 6);
 free(epmaddr);
 
 memset(&ifr, 0, sizeof(ifr));
-strncpy(ifr.ifr_name, interfacename, IFNAMSIZ -1);
+memcpy(&ifr.ifr_name, interfacename, IFNAMSIZ);
 if(ioctl(fd_socket, SIOCGIFHWADDR, &ifr) == 0) memcpy(&mac_virt, ifr.ifr_hwaddr.sa_data, 6);
 
 memset(&ifr, 0, sizeof(ifr));
-strncpy(ifr.ifr_name, interfacename, IFNAMSIZ -1);
+memcpy(&ifr.ifr_name, interfacename, IFNAMSIZ);
 ifr.ifr_data = (char*)&drvinfo;
 drvinfo.cmd = ETHTOOL_GDRVINFO;
 if(ioctl(fd_socket, SIOCETHTOOL, &ifr) < 0)
@@ -6994,7 +7162,7 @@ while(1)
 	if(memcmp(&linein, revstr, 8) == 0)
 		{
 		rpirevision = strtol(&linein[len -6], &revptr, 16);
-		if((revptr - linein) == len)
+		if((revptr -linein) == len)
 			{
 			rev = (rpirevision >> 4) &0xff;
 			if(rev <= 3)
@@ -7024,7 +7192,7 @@ while(1)
 			continue;
 			}
 		rpirevision = strtol(&linein[len -4], &revptr, 16);
-		if((revptr - linein) == len)
+		if((revptr -linein) == len)
 			{
 			if((rpirevision < 0x02) || (rpirevision > 0x15)) continue;
 			if((rpirevision == 0x11) || (rpirevision == 0x14)) continue;
@@ -7044,115 +7212,186 @@ if(rpi < 0x7) return 0;
 return gpioperibase;
 }
 /*===========================================================================*/
-static inline void auto_channel()
+static inline void getscanlistchannel(const char *scanlistin)
 {
-static int c;
 static struct iwreq pwrq;
+static char *fscanlistdup;
+static char *tokptr;
 
-cpa = 0;
-for(c = 1; c < 256; c++)
+fscanlistdup = strndup(scanlistin, 4096);
+if(fscanlistdup == NULL) return;
+tokptr = strtok(fscanlistdup, ",");
+ptrfscanlist = fscanlist;
+while((tokptr != NULL) && (ptrfscanlist < fscanlist +FSCANLIST_MAX))
 	{
 	memset(&pwrq, 0, sizeof(pwrq));
-	strncpy(pwrq.ifr_name, interfacename, IFNAMSIZ -1);
+	memcpy(&pwrq.ifr_name, interfacename, IFNAMSIZ);
 	pwrq.u.freq.flags = IW_FREQ_FIXED;
-	pwrq.u.freq.m = c;
-	pwrq.u.freq.e = 0;
+	pwrq.u.freq.m = atoi(tokptr);
+	tokptr = strtok(NULL, ",");
+	if(pwrq.u.freq.m > 1000) pwrq.u.freq.e = 6;
 	if(ioctl(fd_socket, SIOCSIWFREQ, &pwrq) < 0) continue;
-	if(ioctl(fd_socket, SIOCGIWFREQ, &pwrq) == 0) aktchannel = pwrq.u.freq.m;
-	channelscanlist[cpa] = c;
-	cpa++;
+	if(ioctl(fd_socket, SIOCGIWFREQ, &pwrq) < 0) continue;
+	ptrfscanlist->frequency = pwrq.u.freq.m;
+	if((pwrq.u.freq.m >= 2407) && (pwrq.u.freq.m <= 2474)) ptrfscanlist->channel = (ptrfscanlist->frequency -2407)/5;
+	else if((pwrq.u.freq.m >= 2481) && (pwrq.u.freq.m <= 2487)) ptrfscanlist->channel = (pwrq.u.freq.m -2412)/5;
+	else if((pwrq.u.freq.m >= 5005) && (pwrq.u.freq.m <= 5980)) ptrfscanlist->channel = (pwrq.u.freq.m -5000)/5;
+	else if((pwrq.u.freq.m >= 5955) && (pwrq.u.freq.m <= 6415)) ptrfscanlist->channel = (pwrq.u.freq.m -5950)/5;
+	else continue;
+	if(((ptrfscanlist->channel) < 1) || ((ptrfscanlist->channel) > 255)) continue;
+	ptrfscanlist++;
 	}
-channelscanlist[cpa] = 0;
+ptrfscanlist->frequency = 0;
+ptrfscanlist->channel = 0;
+free(fscanlistdup);
 return;
 }
 /*===========================================================================*/
-static inline void testscanlist()
+static inline void getscanlist()
 {
 static int c;
 static struct iwreq pwrq;
 
-c = 0;
-cpa = 0;
-while(channelscanlist[c] != 0)
+ptrfscanlist = fscanlist;
+for(c = 2407; c < 2488; c++)
 	{
+	if(ptrfscanlist >= fscanlist +FSCANLIST_MAX) break;
 	memset(&pwrq, 0, sizeof(pwrq));
-	strncpy(pwrq.ifr_name, interfacename, IFNAMSIZ -1);
+	memcpy(&pwrq.ifr_name, interfacename, IFNAMSIZ);
 	pwrq.u.freq.flags = IW_FREQ_FIXED;
-	pwrq.u.freq.m = channelscanlist[c];
-	pwrq.u.freq.e = 0;
-	if(ioctl(fd_socket, SIOCSIWFREQ, &pwrq) < 0)
-		{
-		fprintf(stdout, "channel %d not available\n", channelscanlist[c]);
-		c++;
-		continue;
-		}
-	if(ioctl(fd_socket, SIOCGIWFREQ, &pwrq) == 0) aktchannel = pwrq.u.freq.m;
-	channelscanlist[cpa] = channelscanlist[c];
-	cpa++;
-	c++;
+	pwrq.u.freq.m = c;
+	pwrq.u.freq.e = 6;
+	if(ioctl(fd_socket, SIOCSIWFREQ, &pwrq) < 0) continue;
+	ptrfscanlist->frequency = c;
+	if((ptrfscanlist->frequency >= 2407) && (ptrfscanlist->frequency <= 2474)) ptrfscanlist->channel = (ptrfscanlist->frequency -2407)/5;
+	else if((ptrfscanlist->frequency >= 2481) && (ptrfscanlist->frequency <= 2487)) ptrfscanlist->channel = (ptrfscanlist->frequency -2412)/5;
+	else continue;
+	if(((ptrfscanlist->channel) < 1) || ((ptrfscanlist->channel) > 255)) continue;
+	ptrfscanlist++;
 	}
-channelscanlist[cpa] = 0;
+for(c = 5005; c < 5981; c++)
+	{
+	if(ptrfscanlist >= fscanlist +FSCANLIST_MAX) break;
+	memset(&pwrq, 0, sizeof(pwrq));
+	memcpy(&pwrq.ifr_name, interfacename, IFNAMSIZ);
+	pwrq.u.freq.flags = IW_FREQ_FIXED;
+	pwrq.u.freq.m = c;
+	pwrq.u.freq.e = 6;
+	if(ioctl(fd_socket , SIOCSIWFREQ, &pwrq) < 0) continue;
+	ptrfscanlist->frequency = c;
+	if((ptrfscanlist->frequency >= 5005) && (ptrfscanlist->frequency <= 5980)) ptrfscanlist->channel = (ptrfscanlist->frequency -5000)/5;
+	else continue;
+	if(((ptrfscanlist->channel) < 1) || ((ptrfscanlist->channel) > 255)) continue;
+	ptrfscanlist++;
+	}
+for(c = 5955; c < 6416; c++)
+	{
+	if(ptrfscanlist >= fscanlist +FSCANLIST_MAX) break;
+	memset(&pwrq, 0, sizeof(pwrq));
+	memcpy(&pwrq.ifr_name, interfacename, IFNAMSIZ);
+	pwrq.u.freq.flags = IW_FREQ_FIXED;
+	pwrq.u.freq.m = c;
+	pwrq.u.freq.e = 6;
+	if(ioctl(fd_socket , SIOCSIWFREQ, &pwrq) < 0) continue;
+	ptrfscanlist->frequency = c;
+	if((ptrfscanlist->frequency >= 5955) && (ptrfscanlist->frequency <= 6415)) ptrfscanlist->channel = (ptrfscanlist->frequency -5950)/5;
+	else continue;
+	if(((ptrfscanlist->channel) < 1) || ((ptrfscanlist->channel) > 255)) continue;
+	ptrfscanlist++;
+	}
+ptrfscanlist->frequency = 0;
+ptrfscanlist->channel = 0;
 return;
 }
 /*===========================================================================*/
 static inline void show_channels()
 {
 static int c;
-static int res;
 static struct iwreq pwrq;
 static int frequency;
-static int testchannel;
+static int exponent;
 
-fprintf(stdout, "available channels:\n");
-for(c = 0; c < 256; c++)
+fprintf(stdout, "%s available frequencies, channels and tx power reported by driver:\n", interfacename);
+for(c = 2407; c < 2488; c++)
 	{
-	testchannel = 0;
-	frequency = 0;
 	memset(&pwrq, 0, sizeof(pwrq));
-	strncpy(pwrq.ifr_name, interfacename, IFNAMSIZ -1);
-	pwrq.u.freq.e = 0;
+	memcpy(&pwrq.ifr_name, interfacename, IFNAMSIZ);
 	pwrq.u.freq.flags = IW_FREQ_FIXED;
 	pwrq.u.freq.m = c;
-	res = ioctl(fd_socket, SIOCSIWFREQ, &pwrq);
-	if(res >= 0)
-		{
-		memset(&pwrq, 0, sizeof(pwrq));
-		strncpy(pwrq.ifr_name, interfacename, IFNAMSIZ -1);
-		pwrq.u.freq.e = 0;
-		pwrq.u.freq.flags = IW_FREQ_FIXED;
-		res = ioctl(fd_socket, SIOCGIWFREQ, &pwrq);
-		if(res >= 0)
-			{
-			frequency = pwrq.u.freq.m;
-			if(frequency > 100000) frequency /= 100000;
-			if(frequency < 1000) testchannel = frequency;
-			else if((frequency >= 2407) && (frequency <= 2474)) testchannel = (frequency -2407)/5;
-			else if((frequency >= 2481) && (frequency <= 2487)) testchannel = (frequency -2412)/5;
-			else if((frequency >= 5150) && (frequency <= 5875)) testchannel = (frequency -5000)/5;
-			if(testchannel > 0)
-				{
-				memset(&pwrq, 0, sizeof(pwrq));
-				strncpy(pwrq.ifr_name, interfacename, IFNAMSIZ -1);
-				pwrq.u.txpower.value = -1;
-				pwrq.u.txpower.fixed = 1;
-				pwrq.u.txpower.disabled = 0;
-				pwrq.u.txpower.flags = IW_TXPOW_DBM;
-				if(ioctl(fd_socket, SIOCGIWTXPOW, &pwrq) < 0)
-					{
-					if(testchannel == frequency) fprintf(stdout, " %3d\n", testchannel);
-					else fprintf(stdout, " %3d / %4dMHz\n", testchannel, frequency);
-					}
-				else
-					{
-					if(pwrq.u.txpower.value > 0)
-						{
-						if(testchannel == frequency) fprintf(stdout, "%3d (%2d dBm)\n",testchannel, pwrq.u.txpower.value);
-						else fprintf(stdout, "%3d / %4dMHz (%2d dBm)\n",testchannel, frequency, pwrq.u.txpower.value);
-						}
-					}
-				}
-			}
-		}
+	pwrq.u.freq.e = 6;
+	if(ioctl(fd_socket, SIOCSIWFREQ, &pwrq) < 0) continue;
+
+	memset(&pwrq, 0, sizeof(pwrq));
+	memcpy(&pwrq.ifr_name, interfacename, IFNAMSIZ);
+	if(ioctl(fd_socket, SIOCGIWFREQ, &pwrq) < 0) continue;
+	frequency = pwrq.u.freq.m;
+	exponent = pwrq.u.freq.e;
+
+	memset(&pwrq, 0, sizeof(pwrq));
+	memcpy(&pwrq.ifr_name, interfacename, IFNAMSIZ);
+	pwrq.u.txpower.value = -1;
+	pwrq.u.txpower.fixed = 1;
+	pwrq.u.txpower.disabled = 0;
+	pwrq.u.txpower.flags = IW_TXPOW_DBM;
+	if(ioctl(fd_socket, SIOCGIWTXPOW, &pwrq) < 0) continue;
+
+	if((frequency >= 2407) && (frequency <= 2474)) fprintf(stdout, "%4dMHz %3d (%2d dBm)\n", c, (frequency -2407)/5, pwrq.u.txpower.value);
+	else if((frequency >= 2481) && (frequency <= 2487)) fprintf(stdout, "%4dMHz %3d (%2d dBm)\n", c, (frequency -2412)/5, pwrq.u.txpower.value);
+	else fprintf(stdout, "expected frequency %4dMHz reported frequency %4d and exponent %d (%2d dBm)\n", c, frequency, exponent, pwrq.u.txpower.value);
+	}
+
+for(c = 5005; c < 5981; c++)
+	{
+	memset(&pwrq, 0, sizeof(pwrq));
+	memcpy(&pwrq.ifr_name, interfacename, IFNAMSIZ);
+	pwrq.u.freq.flags = IW_FREQ_FIXED;
+	pwrq.u.freq.m = c;
+	pwrq.u.freq.e = 6;
+	if(ioctl(fd_socket, SIOCSIWFREQ, &pwrq) < 0) continue;
+
+	memset(&pwrq, 0, sizeof(pwrq));
+	memcpy(&pwrq.ifr_name, interfacename, IFNAMSIZ);
+	if(ioctl(fd_socket, SIOCGIWFREQ, &pwrq) < 0) continue;
+	frequency = pwrq.u.freq.m;
+	exponent = pwrq.u.freq.e;
+
+	memset(&pwrq, 0, sizeof(pwrq));
+	memcpy(&pwrq.ifr_name, interfacename, IFNAMSIZ);
+	pwrq.u.txpower.value = -1;
+	pwrq.u.txpower.fixed = 1;
+	pwrq.u.txpower.disabled = 0;
+	pwrq.u.txpower.flags = IW_TXPOW_DBM;
+	if(ioctl(fd_socket, SIOCGIWTXPOW, &pwrq) < 0) continue;
+
+	if((frequency >= 5005) && (frequency <= 5980)) fprintf(stdout, "%4dMHz %3d (%2d dBm)\n", c, (frequency -5000)/5, pwrq.u.txpower.value);
+	else fprintf(stdout, "expected frequency %4dMHz reported frequency %4d and exponent %d (%2d dBm)\n", c, frequency, exponent, pwrq.u.txpower.value);
+	}
+
+for(c = 5955; c < 6416; c++)
+	{
+	memset(&pwrq, 0, sizeof(pwrq));
+	memcpy(&pwrq.ifr_name, interfacename, IFNAMSIZ);
+	pwrq.u.freq.flags = IW_FREQ_FIXED;
+	pwrq.u.freq.m = c;
+	pwrq.u.freq.e = 6;
+	if(ioctl(fd_socket, SIOCSIWFREQ, &pwrq) < 0) continue;
+
+	memset(&pwrq, 0, sizeof(pwrq));
+	memcpy(&pwrq.ifr_name, interfacename, IFNAMSIZ);
+	if(ioctl(fd_socket, SIOCGIWFREQ, &pwrq) < 0) continue;
+	frequency = pwrq.u.freq.m;
+	exponent = pwrq.u.freq.e;
+
+	memset(&pwrq, 0, sizeof(pwrq));
+	memcpy(&pwrq.ifr_name, interfacename, IFNAMSIZ);
+	pwrq.u.txpower.value = -1;
+	pwrq.u.txpower.fixed = 1;
+	pwrq.u.txpower.disabled = 0;
+	pwrq.u.txpower.flags = IW_TXPOW_DBM;
+	if(ioctl(fd_socket, SIOCGIWTXPOW, &pwrq) < 0) continue;
+
+	if((frequency >= 5955) && (frequency <= 6415)) fprintf(stdout, "%4dMHz %3d (%2d dBm)\n", c, (frequency -5950)/5, pwrq.u.txpower.value);
+	else fprintf(stdout, "expected frequency %4dMHz reported frequency %4d and exponent %d (%2d dBm)\n", c, frequency, exponent, pwrq.u.txpower.value);
 	}
 return;
 }
@@ -7173,11 +7412,11 @@ if((fd_info = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 	return false;
 	}
 memset(&iwr, 0, sizeof(iwr));
-strncpy(iwr.ifr_name, ifname, IFNAMSIZ -1);
+memcpy(&iwr.ifr_name, ifname, IFNAMSIZ);
 if(ioctl(fd_info, SIOCGIWNAME, &iwr) < 0)
 	{
 #ifdef DEBUG
-	printf("testing %s %s\n", ifname, drivername);
+	fprintf(stdout, "testing %s %s\n", ifname, drivername);
 	perror("not a wireless interface");
 #endif
 	close(fd_info);
@@ -7191,7 +7430,7 @@ if(!epmaddr)
 	return false;
 	}
 memset(&ifr, 0, sizeof(ifr));
-strncpy(ifr.ifr_name, ifname, IFNAMSIZ -1);
+memcpy(&ifr.ifr_name, ifname, IFNAMSIZ);
 epmaddr->cmd = ETHTOOL_GPERMADDR;
 epmaddr->size = 6;
 ifr.ifr_data = (char*)epmaddr;
@@ -7210,7 +7449,7 @@ if(epmaddr->size != 6)
 	}
 memcpy(permaddr, epmaddr->data, 6);
 memset(&ifr, 0, sizeof(ifr));
-strncpy(ifr.ifr_name, ifname, IFNAMSIZ -1);
+memcpy(&ifr.ifr_name, ifname, IFNAMSIZ);
 drvinfo.cmd = ETHTOOL_GDRVINFO;
 ifr.ifr_data = (char*)&drvinfo;
 if(ioctl(fd_info, SIOCETHTOOL, &ifr) < 0)
@@ -7224,7 +7463,7 @@ memcpy(drivername, drvinfo.driver, 32);
 free(epmaddr);
 
 memset(&ifr, 0, sizeof(ifr));
-strncpy(ifr.ifr_name, ifname, IFNAMSIZ -1);
+memcpy(&ifr.ifr_name, ifname, IFNAMSIZ);
 if(ioctl(fd_info, SIOCGIFHWADDR, &ifr) == 0) memcpy(virtaddr, ifr.ifr_hwaddr.sa_data, 6);
 close(fd_info);
 return true;
@@ -7242,7 +7481,7 @@ static char drivername[32];
 if(getifaddrs(&ifaddr) == -1) perror("failed to get ifaddrs");
 else
 	{
-	printf("wlan interfaces:\n");
+	fprintf(stdout, "wlan interfaces:\n");
 	for(ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next)
 		{
 		if((ifa->ifa_addr) && (ifa->ifa_addr->sa_family == AF_PACKET))
@@ -7250,16 +7489,16 @@ else
 			memset(&drivername, 0, 32);
 			if(get_perm_addr(ifa->ifa_name, permaddr, virtaddr, drivername) == true)
 				{
-				for (p = 0; p < 6; p++) printf("%02x", (permaddr[p]));
-				if(checkmonitorinterface(ifa->ifa_name) == false) printf(" %s (%s)", ifa->ifa_name, drivername);
-				else printf(" %s (%s) warning:probably a monitor interface!", ifa->ifa_name, drivername);
+				for (p = 0; p < 6; p++) fprintf(stdout, "%02x", (permaddr[p]));
+				if(checkmonitorinterface(ifa->ifa_name) == false) fprintf(stdout, " %s (%s)", ifa->ifa_name, drivername);
+				else fprintf(stdout, " %s (%s) warning:probably a virtual monitor interface!", ifa->ifa_name, drivername);
 				if(memcmp(&permaddr, &virtaddr, 6) != 0)
 					{
-					printf(" warning:spoofed MAC ");
+					fprintf(stdout, " warning:spoofed MAC ");
 					for (p = 0; p < 6; p++) printf("%02x", (virtaddr[p]));
-					printf(" detected");
+					fprintf(stdout, " detected");
 					}
-				printf("\n");
+				fprintf(stdout, "\n");
 				}
 			}
 		}
@@ -7722,6 +7961,7 @@ eapolmp23count = 0;
 eapolmp34count = 0;
 eapolmp34zeroedcount = 0;
 injectionhit = 0;
+responsehit = 0;
 injectioncount = 0;
 injectionratio = 0;
 gpscount = 0;
@@ -7744,32 +7984,29 @@ return true;
 __attribute__ ((noreturn))
 static inline void version(char *eigenname)
 {
-printf("%s %s (C) %s ZeroBeat\n", eigenname, VERSION_TAG, VERSION_YEAR);
+fprintf(stdout, "%s %s (C) %s ZeroBeat\n", eigenname, VERSION_TAG, VERSION_YEAR);
 exit(EXIT_SUCCESS);
 }
 /*---------------------------------------------------------------------------*/
 __attribute__ ((noreturn))
 static inline void usage(char *eigenname)
 {
-printf("%s %s  (C) %s ZeroBeat\n"
+fprintf(stdout, "%s %s  (C) %s ZeroBeat\n"
 	"usage  : %s <options>\n"
 	"         press ctrl+c to terminate hcxdumptool\n"
 	"         press GPIO button to terminate hcxdumptool\n"
 	"         hardware modification is necessary, read more:\n"
 	"         https://github.com/ZerBea/hcxdumptool/tree/master/docs\n"
 	"         do not set monitor mode by third party tools (iwconfig, iw, airmon-ng)\n"
-	"         do not run hcxdumptool on logical (NETLINK) interfaces (monx, wlanxmon) created by airmon-ng and iw\n"
-	"         WARNING:\n"
-	"          hcxdumptool may not work as expected on virtual NETLINK interfaces\n"
-	"          do not report issues related to iw\n"
+	"         do not run hcxdumptool on logical (NETLINK) interfaces (monx, wlanxmon, prismx, ...) created by airmon-ng and iw\n"
+	"         do not run hcxdumtool on virtual machines or emulators\n"
 	"         do not run hcxdumptool in combination with tools (channel hopper), that take access to the interface (except: tshark, wireshark, tcpdump)\n"
 	"         do not use tools like machcanger, because hcxdumptool run its own MAC space and will ignore this changes\n"
 	"         stop all this services (e.g.: wpa_supplicant.service, NetworkManager.service) that take access to the interface\n"
 	"\n"
 	"short options:\n"
 	"-i <interface> : interface (monitor mode will be enabled by hcxdumptool)\n"
-	"                 It is mandatory that chipset and driver support monitor mode and full packet injection!\n"
-	"                 Running a virtual machine, it is mandatory that the hardware is looped through!\n"
+	"                 it is mandatory that the driver support ioctl() system calls, monitor mode and full packet injection!\n"
 	"-o <dump file> : output file in pcapng format, filename '-' outputs to stdout, '+' outputs to client\n"
 	"                 including radiotap header (LINKTYPE_IEEE802_11_RADIOTAP)\n"
 	"-f <frames>    : frames to save\n"
@@ -7783,29 +8020,28 @@ printf("%s %s  (C) %s ZeroBeat\n"
 	"                 32: WPA encrypted frames\n"
 	"                 64: vendor defined frames (AWDL)\n"
 	"                 to clear default values use -f 0 first, followed by desired frame type (e.g. -f 0 -f 4)\n"
-	"-c <digit>     : set channel (1,2,3, ...)\n"
-	"                 default: auto channel/auto band\n"
+	"-c <digit>     : set frequency (2437,2462,5600,...) or channel (1,2,3, ...)\n"
+	"                 default: auto frequency/auto band\n"
 	"                 maximum entries: 255\n"
-	"                 standard 802.11 channels (depends on device, driver and world regulatory domain):\n"
-	"                 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14\n"
-	"                 36, 38, 40, 44, 48, 52, 56, 60, 64\n"
-	"                 100, 104, 108, 112, 116, 120, 124, 128\n"
-	"                 132, 136, 140, 144, 149, 153, 157, 161, 165\n"
-	"                 201, 205, 209, 213, 217, 221, 225, 229, 233\n"
+	"                 0 - 1000 treated as channel\n"
+	"                   > 1000 treated as frequency in MHz\n"
+	"                 on 5GHz and 6Ghz it is recommended to use frequency instead of channel number\n"
+	"                 because channel numbers are not longer unique\n"
+	"                 standard 802.11 channels (depend on device, driver and world regulatory domain):\n"
+	"                 https://en.wikipedia.org/wiki/List_of_WLAN_channels\n"
 	"-s <digit>     : set predefined scanlist\n"
-	"                 0 = auto channel/auto band (default)\n"
-	"                 1 = 1,6,11,3,5,1,6,11,2,4,1,6,11,7,9,1,6,11,8,10,1,6,11,12,13 (optimized 2.4GHz)\n"
-	"                 2 = 1,2,3,4,5,6,7,8,9,10,11,12,13 (standard 2.4 GHz)\n"
-	"                 3 = 36,40,44,48,52,56,60,64,100,104,108,112,116,120,124,128,132,136,140,149,153,157,161,165 (standard 5GHz)\n"
-	"                 4 = 1,2,3,4,5,6,7,8,9,10,11,12,13,36,40,44,48,52,56,60,64,100,104,108,112,116,120,124,128,132,136,140,149,153,157,161,165 (standard 2.4GHz/5GHz)\n"
-	"                 5 = 201,205,209,213,217,221,225,229,233 (standard 6GHz)\n"
-	"-t <seconds>   : stay time on channel before hopping to the next channel\n"
+	"                 0 = auto frequency/auto band (default)\n"
+	"                 1 = %s (optimized 2.4GHz)\n"
+	"                 2 = %s (standard 2.4 GHz)\n"
+	"                 3 = %s (standard 5GHz)\n"
+	"                 4 = %s (standard 2.4GHz/5GHz)\n"
+	"-t <seconds>   : stay time on frequency before hopping to the next channel\n"
 	"                 default %d seconds\n"
 	"-m <interface> : set monitor mode by ioctl() system call and quit\n"
 	"-I             : show WLAN interfaces and quit\n"
 	"-C             : show available device channels and quit\n"
-	"                 if no channels are available, interface is probably in use or doesn't support monitor mode\n"
-	"                 if more channels are available, firmware, driver and regulatory domain is probably patched\n"
+	"                 if no frequencies are available, interface is probably in use or doesn't support monitor mode\n"
+	"                 if additional frequencies are available, firmware, driver and regulatory domain is probably patched\n"
 	"-h             : show this help\n"
 	"-v             : show version\n"
 	"\n"
@@ -7860,7 +8096,7 @@ printf("%s %s  (C) %s ZeroBeat\n"
 	"                                     affected: incoming and outgoing traffic - that include rca scan\n"
 	"                                     steps to create a BPF (it only has to be done once):\n"
 	"                                      set hcxdumptool monitormode\n"
-	"                                       $ hcxumptool -m <interface>\n"
+	"                                       $ hcxdumptool -m <interface>\n"
 	"                                      create BPF to protect a MAC\n"
 	"                                       $ tcpdump -i <interface> not wlan addr1 11:22:33:44:55:66 and not wlan addr2 11:22:33:44:55:66 -ddd > protect.bpf\n"
 	"                                       recommended to protect own devices\n"
@@ -7869,7 +8105,7 @@ printf("%s %s  (C) %s ZeroBeat\n"
 	"                                       it is strongly recommended to allow all PROBEREQUEST frames (wlan_type mgt && wlan_subtype probe-req)\n"
 	"                                       see man pcap-filter for a list of all filter options\n"
 	"                                      to use the BPF code\n"
-	"                                       $ hcxumptool -i <interface> --bpfc=attack.bpf ...\n"
+	"                                       $ hcxdumptool -i <interface> --bpfc=attack.bpf ...\n"
 	"                                     notice: this is a protect/attack, a capture and a display filter\n"
 	"--filtermode=<digit>               : user space filter mode for filter list\n"
 	"                                     mandatory in combination with --filterlist_ap and/or --filterlist_client\n"
@@ -7882,7 +8118,7 @@ printf("%s %s  (C) %s ZeroBeat\n"
 	"                                        only interact with ACCESS POINTs and CLIENTs from this list\n"
 	"                                        not recommended, because some useful frames could be filtered out\n"
 	"                                     using a filter list doesn't have an affect on rca scan\n"
-	"                                     only for testing usefull - devices to be protected should be added to BPF\n"
+	"                                     only for testing useful - devices to be protected should be added to BPF\n"
 	"                                     notice: this filter option will let hcxdumptool protect or attack a target - it is neither a capture nor a display filter\n" 
 	"--filterlist_ap=<file or MAC>      : ACCESS POINT MAC or MAC filter list\n"
 	"                                     format: 112233445566, 11:22:33:44:55:66, 11-22-33-44-55-66 # comment\n"
@@ -7933,6 +8169,7 @@ printf("%s %s  (C) %s ZeroBeat\n"
 	"                                      :T = TLS shutdown\n"
 	"                                      :- = no packet\n"
 	"                                     default behavior is terminating all responses with a EAP Failure, after last one the client is deauthenticated\n"
+	"--eapreq_follownak                 : jump to Auth Type requested by client in Legacy Nak response, if type available in remaining request sequence\n"
 	"--eaptlstun                        : activate TLS tunnel negotiation and Phase 2 EAP requests when requesting PEAP using --eapreq\n"
 	"                                     requires --eap_server_cert and --eap_server_key\n"
 	"--eap_server_cert=<server.pem>     : EAP TLS tunnel Server cert PEM file\n"
@@ -7951,6 +8188,8 @@ printf("%s %s  (C) %s ZeroBeat\n"
 	"                                     default = GPIO not in use\n"
 	"--gpio_statusled=<digit>           : Raspberry Pi GPIO number of status LED (2...27)\n"
 	"                                     default = GPIO not in use\n"
+	"--gpio_statusled_intervall=<digit> : Raspberry Pi GPIO LED flash intervall\n"
+	"                                     default = flash every 5 seconds\n"
 	"--tot=<digit>                      : enable timeout timer in minutes (minimum = 2 minutes)\n"
 	"                                     hcxdumptool will terminate if tot reached (EXIT code = 2)\n"
 	"                                     for a successful attack tot > 120 minutes recommended\n"
@@ -7959,8 +8198,8 @@ printf("%s %s  (C) %s ZeroBeat\n"
 	"--reboot                           : once hcxdumptool terminated, reboot system\n"
 	"--poweroff                         : once hcxdumptool terminated, power off system\n"
 	"--enable_status=<digit>            : enable real-time display (waterfall)\n"
-	"                                     only incomming traffic\n"
-	"                                     only once at the first occurrence due to MAC randomization of CLIENTs\n"
+	"                                     only incoming traffic\n"
+	"                                     each message is displayed only once at the first occurrence to avoid spamming the real-time display\n"
 	"                                     bitmask:\n"
 	"                                         0: no status (default)\n"
 	"                                         1: EAPOL\n"
@@ -7990,6 +8229,10 @@ printf("%s %s  (C) %s ZeroBeat\n"
 	"                                     otherwise hcxdumptool will not work as expected\n"
 	"--check_injection                  : run antenna test and packet injection test to determine that driver support full packet injection\n"
 	"                                     packet injection will not work as expected if the Wireless Regulatory Domain is unset\n"
+	"--force_interface                  : ignore all ioctl() warnings and error counter\n"
+	"                                     allow hcxdumptool to run on a virtual NETLINK monitor interface\n"
+	"                                     warning: packet injection and/or channel change may not work as expected\n"
+	"                                     you have been warned: do not report issues!\n"
 	"--example                          : show abbreviations and example command lines\n"
 	"--help                             : show this help\n"
 	"--version                          : show version\n"
@@ -8010,6 +8253,7 @@ printf("%s %s  (C) %s ZeroBeat\n"
 	"Use SIGHUB with care, because it will impact pselect()\n"
 	"\n",
 	eigenname, VERSION_TAG, VERSION_YEAR, eigenname,
+	channelscanlist1, channelscanlist2, channelscanlist3, channelscanlist4,
 	STAYTIME, SCANLIST_MAX, OW_M1M2ROGUE_MAX, ATTACKSTOP_MAX, ATTACKRESUME_MAX, EAPOLTIMEOUT, EAPOLEAPTIMEOUT, FILTERLIST_MAX, FILTERLIST_MAX, FILTERLIST_MAX, FILTERLIST_MAX, weakcandidate, BEACONEXTLIST_MAX, BEACONEXTLIST_MAX, FDNSECTIMERB, IESETLEN_MAX, EAPREQLIST_MAX, ERROR_MAX, mcip, MCPORT, mcip, MCPORT);
 exit(EXIT_SUCCESS);
 }
@@ -8017,7 +8261,7 @@ exit(EXIT_SUCCESS);
 __attribute__ ((noreturn))
 static inline void exampleusage(char *eigenname)
 {
-printf("%s %s  (C) %s ZeroBeat\n"
+fprintf(stdout, "%s %s  (C) %s ZeroBeat\n"
 	"abbreviations:\n"
 	"--------------\n"
 	"PMKIDROGUE = PMKID requested from ACCESS POINT by hcxdumptool\n"
@@ -8054,7 +8298,7 @@ exit(EXIT_SUCCESS);
 __attribute__ ((noreturn))
 static inline void usageerror(char *eigenname)
 {
-printf("%s %s (C) %s by ZeroBeat\n"
+fprintf(stdout, "%s %s (C) %s by ZeroBeat\n"
 	"usage: %s -h for help\n", eigenname, VERSION_TAG, VERSION_YEAR, eigenname);
 exit(EXIT_FAILURE);
 }
@@ -8076,11 +8320,10 @@ static bool showinterfaceflag;
 static bool monitormodeflag;
 static bool showchannelsflag;
 static bool beaconparamsflag;
-static char *userscanliststring;
+static const char *userscanliststring;
 static char *nmeaoutname;
 static char *weakcandidateuser;
 static char *eapreqhex;
-static char *tokptr;
 static const char *short_options = "i:o:f:c:s:t:m:IChv";
 static const struct option long_options[] =
 {
@@ -8111,6 +8354,7 @@ static const struct option long_options[] =
 	{"beaconparams",		required_argument,	NULL,	HCX_BEACONPARAMS},
 	{"wpaent",			no_argument,		NULL,	HCX_WPAENT},
 	{"eapreq",			required_argument,	NULL,	HCX_EAPREQ},
+	{"eapreq_follownak",	no_argument,		NULL,	HCX_EAPREQ_FOLLOWNAK},
 	{"eaptlstun",			no_argument,		NULL,	HCX_EAPTUN},
 	{"eap_server_cert",		required_argument,	NULL,	HCX_EAP_SERVER_CERT},
 	{"eap_server_key",		required_argument,	NULL,	HCX_EAP_SERVER_KEY},
@@ -8121,6 +8365,7 @@ static const struct option long_options[] =
 	{"nmea",			required_argument,	NULL,	HCX_NMEA_NAME},
 	{"gpio_button",			required_argument,	NULL,	HCX_GPIO_BUTTON},
 	{"gpio_statusled",		required_argument,	NULL,	HCX_GPIO_STATUSLED},
+	{"gpio_statusled_interval",	required_argument,	NULL,	HCX_GPIO_STATUSLED_FLASHINTERVAL},
 	{"tot",				required_argument,	NULL,	HCX_TOT},
 	{"error_max",			required_argument,	NULL,	HCX_ERROR_MAX},
 	{"reboot",			no_argument,		NULL,	HCX_REBOOT},
@@ -8131,6 +8376,7 @@ static const struct option long_options[] =
 	{"client_port",			required_argument,	NULL,	HCX_CLIENT_PORT},
 	{"check_driver",		no_argument,		NULL,	HCX_CHECK_DRIVER},
 	{"check_injection",		no_argument,		NULL,	HCX_CHECK_INJECTION},
+	{"force_interface",		no_argument,		NULL,	HCX_FORCE_INTERFACE},
 	{"version",			no_argument,		NULL,	HCX_VERSION},
 	{"example",			no_argument,		NULL,	HCX_EXAMPLE},
 	{"help",			no_argument,		NULL,	HCX_HELP},
@@ -8143,7 +8389,6 @@ optind = 1;
 optopt = 0;
 gpiobutton = 0;
 gpiostatusled = 0;
-interfacename = NULL;
 pcapngoutname = NULL;
 filteraplistname = NULL;
 filterclientlistname = NULL;
@@ -8168,7 +8413,7 @@ fd_pcapng = 0;
 fd_devnull = 0;
 rcaorder = 0;
 sl = 0;
-cpa = 0;
+gpiostatusledflashinterval = LEDFLASHINTERVAL;
 staytime = STAYTIME;
 attackcount = staytime *10;
 attackstopcount = ATTACKSTOP_MAX;
@@ -8176,6 +8421,7 @@ attackresumecount = ATTACKRESUME_MAX;
 owm1m2roguemax = OW_M1M2ROGUE_MAX;
 reasoncode = WLAN_REASON_CLASS3_FRAME_FROM_NONASSOC_STA;
 myoui_client = 0;
+forceinterfaceflag = false;
 rcascanflag = false;
 targetscanflag = false;
 beaconactiveflag = false;
@@ -8187,6 +8433,7 @@ monitormodeflag = false;
 beaconparamsflag = false;
 wpaentflag = false;
 eapreqflag = false;
+eapreqfollownakflag = false;
 eaptunflag = false;
 totflag = false;
 gpsdflag = false;
@@ -8205,13 +8452,18 @@ scanlistmax = SCANLIST_MAX;
 tlsctx = NULL;
 memset(&weakcandidate, 0, 64);
 memcpy(&weakcandidate, weakcandidatedefault, 8);
-
+memset(&interfacename, 0, IFNAMSIZ +1);
 while((auswahl = getopt_long(argc, argv, short_options, long_options, &index)) != -1)
 	{
 	switch (auswahl)
 		{
 		case HCX_INTERFACE_NAME:
-		interfacename = optarg;
+		if(strlen(optarg) > IFNAMSIZ)
+			{
+			fprintf(stderr, "interfacename > IFNAMSIZE\n");
+			exit (EXIT_FAILURE);
+			}
+		memcpy(&interfacename, optarg, strlen(optarg));
 		break;
 
 		case HCX_GPS_DEVICE:
@@ -8229,7 +8481,7 @@ while((auswahl = getopt_long(argc, argv, short_options, long_options, &index)) !
 		break;
 
 		case HCX_CHANNEL:
-		userscanliststring = strndup(optarg, 4096);
+		userscanliststring = optarg;
 		break;
 
 		case HCX_SCANLIST:
@@ -8499,6 +8751,10 @@ while((auswahl = getopt_long(argc, argv, short_options, long_options, &index)) !
 		eapreqflag = true;
 		break;
 
+		case HCX_EAPREQ_FOLLOWNAK:
+		eapreqfollownakflag = true;
+		break;
+
 		case HCX_EAPTUN:
 		eaptunflag = true;
 		break;
@@ -8525,6 +8781,15 @@ while((auswahl = getopt_long(argc, argv, short_options, long_options, &index)) !
 		if((gpiostatusled < 2) || (gpiostatusled > 27))
 			{
 			fprintf(stderr, "only 2...27 allowed\n");
+			exit(EXIT_FAILURE);
+			}
+		break;
+
+		case HCX_GPIO_STATUSLED_FLASHINTERVAL:
+		gpiostatusledflashinterval = strtol(optarg, NULL, 10);
+		if(gpiostatusledflashinterval < 5)
+			{
+			fprintf(stderr, "minimum flash interval is 5 seconds\n");
 			exit(EXIT_FAILURE);
 			}
 		break;
@@ -8574,12 +8839,21 @@ while((auswahl = getopt_long(argc, argv, short_options, long_options, &index)) !
 		injectionflag = true;
 		break;
 
+		case HCX_FORCE_INTERFACE:
+		forceinterfaceflag = true;
+		break;
+
 		case HCX_SHOW_INTERFACES:
 		showinterfaceflag = true;
 		break;
 
 		case HCX_SET_MONITORMODE:
-		interfacename = optarg;
+		if(strlen(optarg) > IFNAMSIZ)
+			{
+			fprintf(stderr, "interfacename > IFNAMSIZE\n");
+			exit (EXIT_FAILURE);
+			}
+		memcpy(&interfacename, optarg, strlen(optarg));
 		monitormodeflag = true;
 		break;
 
@@ -8659,67 +8933,6 @@ if(showinterfaceflag == true)
 	return EXIT_SUCCESS;
 	}
 
-if(sl == 1)
-	{
-	while(channelscanlist1[cpa] != 0)
-		{
-		channelscanlist[cpa] = channelscanlist1[cpa];
-		cpa++;
-		}
-	channelscanlist[cpa] = 0;
-	}
-else if(sl == 2)
-	{
-	while(channelscanlist2[cpa] != 0)
-		{
-		channelscanlist[cpa] = channelscanlist2[cpa];
-		cpa++;
-		}
-	channelscanlist[cpa] = 0;
-	}
-else if(sl == 3)
-	{
-	while(channelscanlist3[cpa] != 0)
-		{
-		channelscanlist[cpa] = channelscanlist3[cpa];
-		cpa++;
-		}
-	channelscanlist[cpa] = 0;
-	}
-else if(sl == 4)
-	{
-	while(channelscanlist4[cpa] != 0)
-		{
-		channelscanlist[cpa] = channelscanlist4[cpa];
-		cpa++;
-		}
-	channelscanlist[cpa] = 0;
-	}
-else if(sl == 5)
-	{
-	while(channelscanlist5[cpa] != 0)
-		{
-		channelscanlist[cpa] = channelscanlist5[cpa];
-		cpa++;
-		}
-	channelscanlist[cpa] = 0;
-	}
-else if(userscanliststring != NULL)
-	{
-	tokptr = strtok(userscanliststring, ",");
-	while(tokptr != NULL)
-		{
-		channelscanlist[cpa] = atoi(tokptr);
-		tokptr = strtok(NULL, ",");
-		cpa++;
-		if(cpa > 255)
-			{
-			fprintf(stderr, "only 255 channels allowed\n");
-			exit(EXIT_FAILURE);
-			}
-		}
-	channelscanlist[cpa] = 0;
-	}
 if(monitormodeflag == true)
 	{
 	if(getuid() != 0)
@@ -8727,7 +8940,7 @@ if(monitormodeflag == true)
 		fprintf(stderr, "this program requires root privileges\n");
 		globalclose();
 		}
-	if(interfacename == NULL)
+	if(interfacename[0] == 0)
 		{
 		fprintf(stderr, "no interface specified\n");
 		exit(EXIT_FAILURE);
@@ -8737,7 +8950,7 @@ if(monitormodeflag == true)
 		fprintf(stderr, "failed to init socket\n");
 		exit(EXIT_FAILURE);
 		}
-	printf("setting interface %s to monitor mode\n", interfacename); 
+	fprintf(stdout, "setting interface %s to monitor mode\n", interfacename); 
 	return EXIT_SUCCESS;
 	}
 
@@ -8753,11 +8966,12 @@ if((eaptunflag == true) && (eapreqflag == false))
 	}
 if((eapreqflag == true) && ((attackstatus &DISABLE_CLIENT_ATTACKS) == DISABLE_CLIENT_ATTACKS))
 	{
-	fprintf(stderr, "EAP requests are activated while CLIENT Attacks are disabled");
+	fprintf(stderr, "EAP requests are activated while CLIENT Attacks are disabled\n");
 	exit(EXIT_FAILURE);
 	}
 
-printf("initialization of %s %s...\n", basename(argv[0]), VERSION_TAG);
+fprintf(stdout, "initialization of %s %s...\n", basename(argv[0]), VERSION_TAG);
+if(checkdriverflag == true) fprintf(stdout, "starting driver test...\n");
 if(globalinit() == false)
 	{
 	fprintf(stderr, "initialization failed\n");
@@ -8787,7 +9001,7 @@ if((statusout &STATUS_CLIENT) == STATUS_CLIENT)
 	globalclose();
 	}
 
-if(interfacename == NULL)
+if(interfacename[0] == 0)
 	{
 	fprintf(stderr, "no interface specified\n");
 	exit(EXIT_FAILURE);
@@ -8811,8 +9025,6 @@ if(eapreqflag == true)
 		exit (EXIT_FAILURE);
 		}
 	}
-
-if(checkdriverflag == true) printf("starting driver test...\n");
 
 if(opensocket() == false)
 	{
@@ -8838,18 +9050,34 @@ if(showchannelsflag == true)
 
 if(checkdriverflag == true)
 	{
-	cpa = 0;
-	if(set_channel() == false) errorcount++;
-	if(errorcount == 0) printf("driver tests passed...\nall required ioctl() system calls are supported by driver\n");
-	else printf("several driver errors encountered during the test - monitor mode and ioctl() system calls failed\n");
+	if(set_channel_test(2412) == false) errorcount++;
+	if(errorcount == 0) fprintf(stdout, "driver tests passed...\nall required ioctl() system calls are supported by driver\n");
+	else fprintf(stderr, "%d driver error(s) encountered during the test - monitor mode and ioctl() system calls failed\n", errorcount);
 	globalclose();
 	return EXIT_SUCCESS;
 	}
 
-if(injectionflag == true) auto_channel();
-else if((sl == 0) && (userscanliststring == NULL)) auto_channel();
-testscanlist();
-if(userscanliststring != NULL) free(userscanliststring);
+if(injectionflag == true)
+	{
+	getscanlist();
+	process_fd_injection();
+	globalclose();
+	return EXIT_SUCCESS;
+	}
+
+if(sl == 1) getscanlistchannel(channelscanlist1);
+else if(sl == 2) getscanlistchannel(channelscanlist2);
+else if(sl == 3) getscanlistchannel(channelscanlist3);
+else if(sl == 4) getscanlistchannel(channelscanlist4);
+else if(userscanliststring != NULL) getscanlistchannel(userscanliststring);
+else getscanlist();
+
+if(ptrfscanlist == fscanlist)
+	{
+	fprintf(stderr, "no frequencies available\n");
+	errorcount++;
+	globalclose();
+	}
 
 if(pcapngoutname != NULL)
 	{
@@ -8885,12 +9113,10 @@ if(nmeaoutname != NULL)
 		}
 	setbuf(fh_nmea, NULL);
 	}
-
 if((gpsname != NULL) || (gpsdflag == true)) opengps();
 
-if(rcascanflag == true) process_fd_rca();
-else if(injectionflag == true) process_fd_injection();
-else process_fd();
+if(rcascanflag == false) process_fd();
+else process_fd_rca();
 
 globalclose();
 return EXIT_SUCCESS;

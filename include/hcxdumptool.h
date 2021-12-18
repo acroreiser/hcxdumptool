@@ -1,62 +1,65 @@
-#define HCX_DO_RCASCAN			1
-#define HCX_RCASCAN_MAX			2
-#define HCX_RCASCAN_ORDER		3
-#define HCX_DO_TARGETSCAN		4
-#define HCX_DEAUTH_REASON_CODE		5
-#define HCX_DISABLE_DEAUTHENTICATION	6
-#define HCX_DISABLE_AP_ATTACKS		7
-#define HCX_STOP_AP_ATTACKS		8
-#define HCX_RESUME_AP_ATTACKS		9
-#define HCX_DISABLE_CLIENT_ATTACKS	10
-#define HCX_STOP_CLIENT_M2_ATTACKS	11
-#define HCX_SILENT			12
-#define HCX_GPS_DEVICE			13
-#define HCX_GPSD			14
-#define HCX_NMEA_NAME			15
-#define HCX_EAPOL_TIMEOUT		16
-#define HCX_ACTIVE_BEACON		17
-#define HCX_FLOOD_BEACON		18
-#define HCX_EXTAP_BEACON		19
-#define HCX_EXTAP_WPAENTBEACON		20
-#define HCX_INFINITY			21
-#define HCX_FILTERLIST_AP		22
-#define HCX_FILTERLIST_CLIENT		23
-#define HCX_FILTERLIST_AP_VENDOR	24
-#define HCX_FILTERLIST_CLIENT_VENDOR	25
-#define HCX_FILTERMODE			26
-#define HCX_BPFC			27
-#define HCX_WEAKCANDIDATE		28
-#define HCX_TOT				29
-#define HCX_REBOOT			30
-#define HCX_POWER_OFF			31
-#define HCX_GPIO_BUTTON			32
-#define HCX_GPIO_STATUSLED		33
-#define HCX_IP				34
-#define HCX_SERVER_PORT			35
-#define HCX_CLIENT_PORT			36
-#define HCX_CHECK_DRIVER		37
-#define HCX_CHECK_INJECTION		38
-#define HCX_ERROR_MAX			39
-#define HCX_STATUS			40
-#define HCX_BEACONPARAMS		41
-#define HCX_WPAENT			42
-#define HCX_EAPREQ			43
-#define HCX_EAPTUN			44
-#define HCX_EAP_SERVER_CERT		45
-#define HCX_EAP_SERVER_KEY		46
-#define HCX_EAPOL_EAP_TIMEOUT		47
-#define HCX_INTERFACE_NAME		'i'
-#define HCX_PCAPNG_NAME			'o'
-#define HCX_PACPNG_FRAMES		'f'
-#define HCX_CHANNEL			'c'
-#define HCX_SCANLIST			's'
-#define HCX_STAYTIME			't'
-#define HCX_SHOW_INTERFACES		'I'
-#define HCX_SHOW_CHANNELS		'C'
-#define HCX_SET_MONITORMODE		'm'
-#define HCX_HELP			'h'
-#define HCX_EXAMPLE			'x'
-#define HCX_VERSION			'v'
+#define HCX_DO_RCASCAN				1
+#define HCX_RCASCAN_MAX				2
+#define HCX_RCASCAN_ORDER			3
+#define HCX_DO_TARGETSCAN			4
+#define HCX_DEAUTH_REASON_CODE			5
+#define HCX_DISABLE_DEAUTHENTICATION		6
+#define HCX_DISABLE_AP_ATTACKS			7
+#define HCX_STOP_AP_ATTACKS			8
+#define HCX_RESUME_AP_ATTACKS			9
+#define HCX_DISABLE_CLIENT_ATTACKS		10
+#define HCX_STOP_CLIENT_M2_ATTACKS		11
+#define HCX_SILENT				12
+#define HCX_GPS_DEVICE				13
+#define HCX_GPSD				14
+#define HCX_NMEA_NAME				15
+#define HCX_EAPOL_TIMEOUT			16
+#define HCX_ACTIVE_BEACON			17
+#define HCX_FLOOD_BEACON			18
+#define HCX_EXTAP_BEACON			19
+#define HCX_EXTAP_WPAENTBEACON			20
+#define HCX_INFINITY				21
+#define HCX_FILTERLIST_AP			22
+#define HCX_FILTERLIST_CLIENT			23
+#define HCX_FILTERLIST_AP_VENDOR		24
+#define HCX_FILTERLIST_CLIENT_VENDOR		25
+#define HCX_FILTERMODE				26
+#define HCX_BPFC				27
+#define HCX_WEAKCANDIDATE			28
+#define HCX_TOT					29
+#define HCX_REBOOT				30
+#define HCX_POWER_OFF				31
+#define HCX_GPIO_BUTTON				32
+#define HCX_GPIO_STATUSLED			33
+#define HCX_GPIO_STATUSLED_FLASHINTERVAL	34
+#define HCX_IP					35
+#define HCX_SERVER_PORT				36
+#define HCX_CLIENT_PORT				37
+#define HCX_CHECK_DRIVER			38
+#define HCX_CHECK_INJECTION			39
+#define HCX_FORCE_INTERFACE			40
+#define HCX_ERROR_MAX				41
+#define HCX_STATUS				42
+#define HCX_BEACONPARAMS			43
+#define HCX_WPAENT				44
+#define HCX_EAPREQ				45
+#define HCX_EAPREQ_FOLLOWNAK			46
+#define HCX_EAPTUN				47
+#define HCX_EAP_SERVER_CERT			48
+#define HCX_EAP_SERVER_KEY			49
+#define HCX_EAPOL_EAP_TIMEOUT			50
+#define HCX_INTERFACE_NAME			'i'
+#define HCX_PCAPNG_NAME				'o'
+#define HCX_PACPNG_FRAMES			'f'
+#define HCX_CHANNEL				'c'
+#define HCX_SCANLIST				's'
+#define HCX_STAYTIME				't'
+#define HCX_SHOW_INTERFACES			'I'
+#define HCX_SHOW_CHANNELS			'C'
+#define HCX_SET_MONITORMODE			'm'
+#define HCX_HELP				'h'
+#define HCX_EXAMPLE				'x'
+#define HCX_VERSION				'v'
 
 #define ERROR_MAX		100
 #define WATCHDOG		600
@@ -69,6 +72,7 @@
 #define EAPLIST_MAX		1024
 #define EAPREQLIST_MAX		20
 
+#define FSCANLIST_MAX		1000
 #define SCANLIST_MAX		256
 #define FILTERLIST_MAX		256
 #define	FILTERLIST_LINE_LEN	256
@@ -103,6 +107,8 @@
 
 #define USER_EXIT_TOT		2
 #define STAYTIME		4
+#define LEDFLASHINTERVAL	5
+
 #define NMEA_MAX		256
 
 #define ESSID_LEN_MAX		32
@@ -368,6 +374,7 @@ typedef struct
  unsigned int		hit;
  char			rssi;
  uint8_t		channel;
+ unsigned int		frequency;
  uint8_t		essidlen;
  uint8_t		essid[ESSID_LEN_MAX];
 }scanlist_t;
@@ -434,4 +441,11 @@ uint8_t			mode;
 #define EAPREQLIST_MODE_TLS 1
 }eapreqlist_t;
 #define EAPREQLIST_SIZE (sizeof(eapreqlist_t))
+/*===========================================================================*/
+typedef struct
+{
+int	frequency;
+int	channel;
+}fscanlist_t;
+#define	FSCANLIST_SIZE (sizeof(fscanlist_t))
 /*===========================================================================*/
